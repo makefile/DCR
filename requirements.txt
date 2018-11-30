@@ -1,0 +1,6 @@
+Cython
+EasyDict
+opencv-python
+PyYAML
+scipy
+matplotlib==2.2.3
