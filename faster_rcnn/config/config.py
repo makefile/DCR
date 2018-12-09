@@ -22,6 +22,7 @@ config.output_path = ''
 config.symbol = ''
 config.gpus = ''
 config.CLASS_AGNOSTIC = True
+config.RESIZE_TO_FIX_SIZE = True
 config.SCALES = [(600, 1000)]  # first is scale (the shorter side); second is max size
 
 # default training
@@ -146,6 +147,10 @@ config.TEST = edict()
 config.TEST.HAS_RPN = False
 # size of images for each device
 config.TEST.BATCH_IMAGES = 1
+config.TEST.DO_MULTISCALE_TEST = False
+config.TEST.MULTISCALE = (1.0, 1.2, 1.4, 1.6)
+# Save visualization images
+config.TEST.save_img_path = ''
 
 # RPN proposal
 config.TEST.CXX_PROPOSAL = True

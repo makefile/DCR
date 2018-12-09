@@ -229,6 +229,55 @@ class IMDB(object):
         self.image_set_index *= 2
         return roidb
 
+    def append_flipped_quadrangle_images(self, roidb):
+        """
+        append flipped images to an roidb
+        flip boxes coordinates, images will be actually flipped when loading into network
+        :param roidb: [image_index]['boxes', 'gt_classes', 'gt_overlaps', 'flipped']
+        :return: roidb: [image_index]['boxes', 'gt_classes', 'gt_overlaps', 'flipped']
+        """
+        print 'append flipped images to roidb'
+        assert self.num_images == len(roidb)
+        for i in range(self.num_images):
+            roi_rec = roidb[i]
+            boxes = roi_rec['boxes'].copy()
+            oldx1 = boxes[:, 0].copy()
+            oldx2 = boxes[:, 2].copy()
+            oldx3 = boxes[:, 4].copy()
+            oldx4 = boxes[:, 6].copy()
+            oldy1 = boxes[:, 1].copy()
+            oldy2 = boxes[:, 3].copy()
+            oldy3 = boxes[:, 5].copy()
+            oldy4 = boxes[:, 7].copy()
+            boxes[:, 0] = roi_rec['width'] - oldx2 - 1
+            boxes[:, 1] = oldy2
+            boxes[:, 2] = roi_rec['width'] - oldx1 - 1
+            boxes[:, 3] = oldy1
+            boxes[:, 4] = roi_rec['width'] - oldx4 - 1
+            boxes[:, 5] = oldy4
+            boxes[:, 6] = roi_rec['width'] - oldx3 - 1
+            boxes[:, 7] = oldy3
+            # assert (boxes[:, 2] >= boxes[:, 0]).all()
+            entry = {'image': roi_rec['image'],
+                     'height': roi_rec['height'],
+                     'width': roi_rec['width'],
+                     'boxes': boxes,
+                     'gt_classes': roidb[i]['gt_classes'],
+                     'gt_overlaps': roidb[i]['gt_overlaps'],
+                     'max_classes': roidb[i]['max_classes'],
+                     'max_overlaps': roidb[i]['max_overlaps'],
+                     'flipped': True}
+
+            # if roidb has mask
+            if 'cache_seg_inst' in roi_rec:
+                [filename, extension] = os.path.splitext(roi_rec['cache_seg_inst'])
+                entry['cache_seg_inst'] = os.path.join(filename + '_flip' + extension)
+
+            roidb.append(entry)
+
+        self.image_set_index *= 2
+        return roidb
+
     def flip_and_save(self, image_path):
         """
         flip the image by the path and save the flipped image with suffix 'flip'
