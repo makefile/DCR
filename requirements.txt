@@ -1,3 +1,6 @@
+shapely
+mxnet
+numpy
 Cython
 EasyDict
 opencv-python

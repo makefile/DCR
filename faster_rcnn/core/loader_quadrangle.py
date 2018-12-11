@@ -288,7 +288,7 @@ class ROIIter(mx.io.DataIter):
 class QuadrangleAnchorLoader(mx.io.DataIter):
     def __init__(self, feat_sym, roidb, cfg, batch_size=1, shuffle=False, ctx=None, work_load_list=None,
                  feat_stride=16, anchor_scales=(8, 16, 32), anchor_ratios=(0.5, 1, 2), allowed_border=0,
-                 aspect_grouping=False):
+                 aspect_grouping=False, anchor_angles=(-60, -30, 0, 30, 60, 90), inclined_anchor=False):
         """
         This Iter will provide roi data to Fast R-CNN network
         :param feat_sym: to infer shape of assign_output
@@ -315,8 +315,10 @@ class QuadrangleAnchorLoader(mx.io.DataIter):
         self.feat_stride = feat_stride
         self.anchor_scales = anchor_scales
         self.anchor_ratios = anchor_ratios
+        self.anchor_angles = anchor_angles
         self.allowed_border = allowed_border
         self.aspect_grouping = aspect_grouping
+        self.inclined_anchor = inclined_anchor
 
         # infer properties from roidb
         self.size = len(roidb)
@@ -408,7 +410,9 @@ class QuadrangleAnchorLoader(mx.io.DataIter):
         im_info = [[max_shapes['data'][2], max_shapes['data'][3], 1.0]]
         _, feat_shape, _ = self.feat_sym.infer_shape(**max_shapes)
         label = assign_quadrangle_anchor(feat_shape[0], np.zeros((0, 9)), im_info, self.cfg,
-                              self.feat_stride, self.anchor_scales, self.anchor_ratios, self.allowed_border)
+                              self.feat_stride, self.anchor_scales, self.anchor_ratios,
+                              self.anchor_angles, self.inclined_anchor,
+                              self.allowed_border)
         label = [label[k] for k in self.label_name]
         label_shape = [(k, tuple([input_batch_size] + list(v.shape[1:]))) for k, v in zip(self.label_name, label)]
         return max_data_shape, label_shape
@@ -456,7 +460,8 @@ class QuadrangleAnchorLoader(mx.io.DataIter):
             # assign quadrangle anchor for label
             label = assign_quadrangle_anchor(feat_shape, label['gt_boxes'], data['im_info'], self.cfg,
                                   self.feat_stride, self.anchor_scales,
-                                  self.anchor_ratios, self.allowed_border)
+                                  self.anchor_ratios, self.anchor_angles, self.inclined_anchor,
+                                  self.allowed_border)
             new_label_list.append(label)
 
         all_data = dict()
@@ -508,7 +513,8 @@ class QuadrangleAnchorLoader(mx.io.DataIter):
         # assign anchor for label
         label = assign_quadrangle_anchor(feat_shape, label['gt_boxes'], data['im_info'], self.cfg,
                               self.feat_stride, self.anchor_scales,
-                              self.anchor_ratios, self.allowed_border)
+                              self.anchor_ratios, self.anchor_angles, self.inclined_anchor,
+                              self.allowed_border)
         return {'data': data, 'label': label}
 
 

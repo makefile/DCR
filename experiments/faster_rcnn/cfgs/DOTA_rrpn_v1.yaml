@@ -1,9 +1,10 @@
 ---
 MXNET_VERSION: "mxnet"
-output_path: "./output/rcnn/DOTA_quadrangle"
-symbol: resnet_v1_101_rcnn_quadrangle
+output_path: "./output/rcnn/DOTA_rrpn_v1"
+symbol: resnet_v1_101_rrpn_v1
 gpus: '0,1,2,3'
-CLASS_AGNOSTIC: false
+CLASS_AGNOSTIC: true
+#CLASS_AGNOSTIC: false
 #RESIZE_TO_FIX_SIZE: true # not used by the project
 # if RESIZE_TO_FIX_SIZE is true, the SCALES means target size of width and height
 SCALES:
@@ -48,7 +49,11 @@ network:
   - 8
   - 16
   - 32
-  NUM_ANCHORS: 9
+  ANCHOR_ANGLES:
+  - -60
+  - -30
+  - 0
+  NUM_ANCHORS: 27
 dataset:
   NUM_CLASSES: 16
   dataset: DOTA_oriented
@@ -56,7 +61,7 @@ dataset:
   image_set: train
   root_path: "./data"
   test_image_set: val
-#  test_image_set: test
+  #  test_image_set: test
   proposal: rpn
 TRAIN:
   lr: 0.0005
@@ -114,6 +119,10 @@ TRAIN:
   RPN_CLOBBER_POSITIVES: false
   # rpn bounding box regression params
   RPN_BBOX_WEIGHTS:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
   - 1.0
   - 1.0
   - 1.0

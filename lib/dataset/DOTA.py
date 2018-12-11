@@ -22,7 +22,7 @@ import cv2
 # import zipfile
 from PIL import Image
 import codecs
-
+from ds_utils import get_best_begin_point
 
 # the target of this class is to get DOTA roidb
 class DOTA(IMDB):
@@ -297,7 +297,7 @@ class DOTA_oriented(IMDB):
     def load_annotation(self, index):
         """
         for a given index, load image and bounding boxes info from XML file
-        :param image_name: image name in the data dir
+        :param index: image name in the data dir
         :return: record['boxes', 'gt_classes', 'gt_overlaps', 'flipped']
         """
         # import xml.etree.ElementTree as ET
@@ -347,7 +347,7 @@ class DOTA_oriented(IMDB):
                 # ymin = min(y1, y2, y3, y4)
                 # ymax = max(y1, y2, y3, y4)
                 cls = class_to_index[obj[8].lower().strip()]
-                boxes[ix, :] = [x1, y1, x2, y2, x3, y3, x4, y4]
+                boxes[ix, :] = get_best_begin_point([x1, y1, x2, y2, x3, y3, x4, y4])
                 gt_classes[ix] = cls
                 overlaps[ix, cls] = 1.0
             roi_rec.update({'boxes': boxes,
@@ -394,7 +394,7 @@ class DOTA_oriented(IMDB):
             x4 = float(bbox[6]) - 1
             y4 = float(bbox[7]) - 1
             cls = class_to_index[obj[8].lower().strip()]
-            boxes[ix, :] = [x1, y1, x2, y2, x3, y3, x4, y4]
+            boxes[ix, :] = get_best_begin_point([x1, y1, x2, y2, x3, y3, x4, y4])
             gt_classes[ix] = cls
             overlaps[ix, cls] = 1.0
         roi_rec.update({'boxes': boxes,
@@ -404,6 +404,7 @@ class DOTA_oriented(IMDB):
                         'max_overlaps': overlaps.max(axis=1),
                         'flipped': False})
         return roi_rec
+
 
     def evaluate_detections(self, detections):
         """

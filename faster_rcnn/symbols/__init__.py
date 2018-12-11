@@ -1,3 +1,4 @@
 import resnet_v1_101_rcnn
 import resnet_v1_101_rcnn_dcn
 import resnet_v1_101_rcnn_quadrangle
+import resnet_v1_101_rrpn_v1

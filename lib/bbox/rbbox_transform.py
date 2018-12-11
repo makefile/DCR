@@ -48,10 +48,13 @@ def clip_quadrangle_boxes(boxes, im_shape):
 def nonlinear_transform_quadrangle(ex_rois, gt_rois):
     """
     compute bounding box regression targets from ex_rois to gt_rois
-    :param ex_rois: [N, 4]
+    :param ex_rois: [N, 4] or [N, 8]
     :param gt_rois: [N, 8]
     :return: [N, 8]
     """
+    if ex_rois.shape[1] == 8:
+        return nonlinear_transform_rotate(ex_rois, gt_rois)
+
     assert ex_rois.shape[0] == gt_rois.shape[0], 'inconsistent rois number'
 
     # ex_widths = ex_rois[:, 2] - ex_rois[:, 0] + 1.0
@@ -107,6 +110,9 @@ def nonlinear_pred_quadrangle(boxes, box_deltas):
     :param box_deltas: [N, 8 * num_classes]
     :return: [N 8 * num_classes]
     """
+    if boxes.shape[1] == 8:
+        return nonlinear_pred_rotate(boxes, box_deltas)
+
     if boxes.shape[0] == 0:
         return np.zeros((0, box_deltas.shape[1]))
 
@@ -161,6 +167,101 @@ def nonlinear_pred_quadrangle(boxes, box_deltas):
     pred_boxes[:, 7::8] = y4 + dy4 * heights
 
     # print 'after pred', dx1 * widths, dy1 * heights, dx2 * widths, dy2 * heights, dx3 * widths, dy3 * heights, dx4 * widths, dy4 * heights
+
+    return pred_boxes
+
+
+def nonlinear_transform_rotate(ex_rois, gt_rois):
+    """
+    compute bounding box regression targets from ex_rois to gt_rois
+    :param ex_rois: [N, 8]
+    :param gt_rois: [N, 8]
+    :return: [N, 8]
+    """
+    assert ex_rois.shape[0] == gt_rois.shape[0], 'inconsistent rois number'
+
+    # get bounding box
+    xs = ex_rois[:, [0, 2, 4, 6]]
+    ys = ex_rois[:, [1, 3, 5, 7]]
+    xmin = xs.min(axis=1)
+    ymin = ys.min(axis=1)
+    xmax = xs.max(axis=1)
+    ymax = ys.max(axis=1)
+    ex_width = xmax - xmin + 1.0
+    ex_height = ymax - ymin + 1.0
+
+    gt_rois.astype(float)
+
+    targets_dx1 = (gt_rois[:, 0] - ex_rois[:, 0]) / (ex_width + 1e-14)
+    targets_dx2 = (gt_rois[:, 2] - ex_rois[:, 2]) / (ex_width + 1e-14)
+    targets_dx3 = (gt_rois[:, 4] - ex_rois[:, 4]) / (ex_width + 1e-14)
+    targets_dx4 = (gt_rois[:, 6] - ex_rois[:, 6]) / (ex_width + 1e-14)
+    targets_dy1 = (gt_rois[:, 1] - ex_rois[:, 1]) / (ex_height + 1e-14)
+    targets_dy2 = (gt_rois[:, 3] - ex_rois[:, 3]) / (ex_height + 1e-14)
+    targets_dy3 = (gt_rois[:, 5] - ex_rois[:, 5]) / (ex_height + 1e-14)
+    targets_dy4 = (gt_rois[:, 7] - ex_rois[:, 7]) / (ex_height + 1e-14)
+
+    targets = np.vstack((targets_dx1, targets_dy1, targets_dx2, targets_dy2, targets_dx3, targets_dy3, targets_dx4, targets_dy4)).transpose()
+    return targets
+
+def nonlinear_pred_rotate(boxes, box_deltas):
+    """
+    Transform the set of class-agnostic boxes into class-specific boxes
+    by applying the predicted offsets (box_deltas)
+    :param boxes: !important [N 8]
+    :param box_deltas: [N, 8 * num_classes]
+    :return: [N 8 * num_classes]
+    """
+    if boxes.shape[0] == 0:
+        return np.zeros((0, box_deltas.shape[1]))
+
+    boxes = boxes.astype(np.float, copy=False)
+    # get bounding box
+    xs = boxes[:, [0, 2, 4, 6]]
+    ys = boxes[:, [1, 3, 5, 7]]
+    xmin = xs.min(axis=1)
+    ymin = ys.min(axis=1)
+    xmax = xs.max(axis=1)
+    ymax = ys.max(axis=1)
+    widths = xmax - xmin + 1.0
+    heights = ymax - ymin + 1.0
+    widths = widths[:, np.newaxis]
+    heights = heights[:, np.newaxis]
+    x1 = boxes[:, 0][:, np.newaxis]
+    y1 = boxes[:, 1][:, np.newaxis]
+    x2 = boxes[:, 2][:, np.newaxis]
+    y2 = boxes[:, 3][:, np.newaxis]
+    x3 = boxes[:, 4][:, np.newaxis]
+    y3 = boxes[:, 5][:, np.newaxis]
+    x4 = boxes[:, 6][:, np.newaxis]
+    y4 = boxes[:, 7][:, np.newaxis]
+
+    dx1 = box_deltas[:, 0::8]
+    dy1 = box_deltas[:, 1::8]
+    dx2 = box_deltas[:, 2::8]
+    dy2 = box_deltas[:, 3::8]
+    dx3 = box_deltas[:, 4::8]
+    dy3 = box_deltas[:, 5::8]
+    dx4 = box_deltas[:, 6::8]
+    dy4 = box_deltas[:, 7::8]
+
+    pred_boxes = np.zeros(box_deltas.shape)
+    # x1
+    pred_boxes[:, 0::8] = x1 + dx1 * widths
+    # y1
+    pred_boxes[:, 1::8] = y1 + dy1 * heights
+    # x2
+    pred_boxes[:, 2::8] = x2 + dx2 * widths
+    # y2
+    pred_boxes[:, 3::8] = y2 + dy2 * heights
+    # x3
+    pred_boxes[:, 4::8] = x3 + dx3 * widths
+    # y3
+    pred_boxes[:, 5::8] = y3 + dy3 * heights
+    # x4
+    pred_boxes[:, 6::8] = x4 + dx4 * widths
+    # y4
+    pred_boxes[:, 7::8] = y4 + dy4 * heights
 
     return pred_boxes
 

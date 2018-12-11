@@ -14,6 +14,7 @@
 import time
 import logging
 import mxnet as mx
+import sys
 
 
 class Speedometer(object):
@@ -34,7 +35,7 @@ class Speedometer(object):
         if self.init:
             if count % self.frequent == 0:
                 speed = self.frequent * self.batch_size / (time.time() - self.tic)
-                s = ''
+                # s = ''
                 if param.eval_metric is not None:
                     name, value = param.eval_metric.get()
                     s = "Epoch[%d] Batch [%d]\tSpeed: %.2f samples/sec\tTrain-" % (param.epoch, count, speed)
@@ -45,6 +46,10 @@ class Speedometer(object):
 
                 logging.info(s)
                 print(s)
+                # fyk: flush screen output
+                # s = '\r' + s
+                # sys.stdout.write(s)
+                # sys.stdout.flush()
                 self.tic = time.time()
         else:
             self.init = True
