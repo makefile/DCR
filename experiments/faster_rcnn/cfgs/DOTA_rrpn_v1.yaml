@@ -2,7 +2,8 @@
 MXNET_VERSION: "mxnet"
 output_path: "./output/rcnn/DOTA_rrpn_v1"
 symbol: resnet_v1_101_rrpn_v1
-gpus: '0,1,2,3'
+#gpus: '0,1,2,3'
+gpus: 'all'
 CLASS_AGNOSTIC: true
 #CLASS_AGNOSTIC: false
 #RESIZE_TO_FIX_SIZE: true # not used by the project
@@ -65,14 +66,16 @@ dataset:
   proposal: rpn
 TRAIN:
   lr: 0.0005
-  lr_step: '45,52'
+#  lr_step: '45,52'
+  lr_step: '10,13'
   lr_factor: 0.1
   warmup: true
   warmup_lr: 0.00005
   # typically we will use 1000 warmup step for single GPU on DOTA
   warmup_step: 1000
   begin_epoch: 0
-  end_epoch: 60
+#  end_epoch: 60
+  end_epoch: 15
   model_prefix: 'rcnn_DOTA_quadrangle'
   # whether resume training
   RESUME: false
@@ -89,8 +92,8 @@ TRAIN:
   # group images with similar aspect ratio
   ASPECT_GROUPING: true
   # R-CNN
-  # rcnn rois batch size
-  BATCH_ROIS: 128
+  # rcnn rois batch size, -1 for use all OHEM , or 128
+  BATCH_ROIS: -1
   BATCH_ROIS_OHEM: 128
   # rcnn rois sampling params
   FG_FRACTION: 0.25
@@ -175,5 +178,6 @@ TEST:
   PROPOSAL_MIN_SIZE: 0
   # RCNN nms
   NMS: 0.3
-  test_epoch: 59
+#  test_epoch: 59
+  test_epoch: 14
   save_img_path: 'data/vis'

@@ -1,16 +1,14 @@
 ---
 MXNET_VERSION: "mxnet"
-output_path: "./output/rcnn/DOTA_quadrangle"
+output_path: "./output/rcnn/DOTA-c6_quadrangle"
 symbol: resnet_v1_101_rcnn_quadrangle
 #gpus: '0,1,2,3'
 gpus: 'all'
 CLASS_AGNOSTIC: true
 #CLASS_AGNOSTIC: false # for the author trained
-#RESIZE_TO_FIX_SIZE: true # not used by the project
-# if RESIZE_TO_FIX_SIZE is true, the SCALES means target size of width and height
 SCALES:
-- 1024
-- 1024
+- 800
+- 800
 default:
   frequent: 100
   kvstore: device
@@ -44,17 +42,22 @@ network:
   - beta
   ANCHOR_RATIOS:
   - 0.5
+  - 0.25
+  - 0.17
   - 1
   - 2
+  - 4
+  - 6
   ANCHOR_SCALES:
+  - 4
   - 8
   - 16
   - 32
-  NUM_ANCHORS: 9
+  NUM_ANCHORS: 28
 dataset:
-  NUM_CLASSES: 16
-  dataset: DOTA_oriented
-  dataset_path: "./data/DOTA_split_1024"
+  NUM_CLASSES: 7
+  dataset: DOTA_oriented_c6
+  dataset_path: "./data/DOTA-c6_split_800"
   image_set: train
   root_path: "./data"
   test_image_set: val
@@ -62,16 +65,16 @@ dataset:
   proposal: rpn
 TRAIN:
   lr: 0.0005
-#  lr_step: '45,52'
-  lr_step: '16,24'
+  lr_step: '45,52'
+#  lr_step: '16,24'
   lr_factor: 0.1
   warmup: true
   warmup_lr: 0.00005
   # typically we will use 1000 warmup step for single GPU on DOTA
   warmup_step: 1000
   begin_epoch: 0
-#  end_epoch: 60
-  end_epoch: 30
+  end_epoch: 60
+#  end_epoch: 30
   model_prefix: 'rcnn_DOTA_quadrangle'
   # whether resume training
   RESUME: false
@@ -80,7 +83,7 @@ TRAIN:
   # whether shuffle image
   SHUFFLE: true
   # whether use OHEM
-  ENABLE_OHEM: true
+  ENABLE_OHEM: false
   # size of images for each device, 2 for rcnn, 1 for rpn and e2e
   BATCH_IMAGES: 1
   # e2e changes behavior of anchor loader and metric
@@ -89,7 +92,7 @@ TRAIN:
   ASPECT_GROUPING: true
   # R-CNN
   # rcnn rois batch size, -1 for use all OHEM , or 128
-  BATCH_ROIS: -1
+  BATCH_ROIS: 128
   BATCH_ROIS_OHEM: 128
   # rcnn rois sampling params
   FG_FRACTION: 0.25
@@ -170,6 +173,6 @@ TEST:
   PROPOSAL_MIN_SIZE: 0
   # RCNN nms
   NMS: 0.3
-#  test_epoch: 59
-  test_epoch: 29
+  test_epoch: 59
+#  test_epoch: 29
   save_img_path: 'data/vis'

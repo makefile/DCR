@@ -32,7 +32,7 @@ from generate_rotate_anchor import generate_rotate_anchors
 from bbox.bbox_transform import bbox_overlaps, bbox_transform
 from bbox.rbbox_transform import bbox_transform_quadrangle
 from nms.nms_poly import cpu_polygon_overlaps, gpu_polygon_overlaps
-from dataset.ds_utils import get_horizen_minAreaRectangle
+from dataset.ds_utils import get_horizon_minAreaRectangle
 from utils.dplog import Logger as logger
 
 def get_rpn_quadrangle_testbatch(roidb, cfg):
@@ -118,6 +118,8 @@ def assign_quadrangle_anchor(feat_shape, gt_boxes, im_info, cfg, feat_stride=16,
         base_anchors = generate_rotate_anchors(base_size=feat_stride, scales=scales, ratios=list(ratios), angles=list(angles))
     else:
         base_anchors = generate_anchors(base_size=feat_stride, ratios=list(ratios), scales=scales)
+        # fyk: get 4-coord bbox from quadrangle gt
+        gt_boxes_bbox = get_horizon_minAreaRectangle(gt_boxes[:, :8])
     num_anchors = base_anchors.shape[0]
     box_dim = base_anchors.shape[1]
     feat_height, feat_width = feat_shape[-2:]
@@ -137,11 +139,11 @@ def assign_quadrangle_anchor(feat_shape, gt_boxes, im_info, cfg, feat_stride=16,
     shift_x = np.arange(0, feat_width) * feat_stride
     shift_y = np.arange(0, feat_height) * feat_stride
     shift_x, shift_y = np.meshgrid(shift_x, shift_y)
-    if box_dim == 4:
-        shifts = np.vstack((shift_x.ravel(), shift_y.ravel(), shift_x.ravel(), shift_y.ravel())).transpose()
-    else:
+    if inclined_anchor:
         shifts = np.vstack((shift_x.ravel(), shift_y.ravel(), shift_x.ravel(), shift_y.ravel(),
                         shift_x.ravel(), shift_y.ravel(), shift_x.ravel(), shift_y.ravel())).transpose()
+    else:
+        shifts = np.vstack((shift_x.ravel(), shift_y.ravel(), shift_x.ravel(), shift_y.ravel())).transpose()
 
     # add A anchors (1, A, 4) to
     # cell K shifts (K, 1, 4) to get
@@ -155,11 +157,16 @@ def assign_quadrangle_anchor(feat_shape, gt_boxes, im_info, cfg, feat_stride=16,
 
     # only keep anchors inside the image
     if inclined_anchor:
-        bbox_anchors = get_horizen_minAreaRectangle(all_anchors)
-        inds_inside = np.where((bbox_anchors[:, 0] >= -allowed_border) &
-                               (bbox_anchors[:, 1] >= -allowed_border) &
-                               (bbox_anchors[:, 2] < im_info[1] + allowed_border) &
-                               (bbox_anchors[:, 3] < im_info[0] + allowed_border))[0]
+        right_bound = im_info[1] + allowed_border
+        bottom_bound = im_info[0] + allowed_border
+        inds_inside = np.where((all_anchors[:, 0] >= -allowed_border) & (all_anchors[:, 0] < right_bound) &
+                               (all_anchors[:, 2] >= -allowed_border) & (all_anchors[:, 2] < right_bound) &
+                               (all_anchors[:, 4] >= -allowed_border) & (all_anchors[:, 4] < right_bound) &
+                               (all_anchors[:, 6] >= -allowed_border) & (all_anchors[:, 6] < right_bound) &
+                               (all_anchors[:, 1] >= -allowed_border) & (all_anchors[:, 1] < bottom_bound) &
+                               (all_anchors[:, 3] >= -allowed_border) & (all_anchors[:, 3] < bottom_bound) &
+                               (all_anchors[:, 5] >= -allowed_border) & (all_anchors[:, 5] < bottom_bound) &
+                               (all_anchors[:, 7] >= -allowed_border) & (all_anchors[:, 7] < bottom_bound))[0]
     else:
         inds_inside = np.where((all_anchors[:, 0] >= -allowed_border) &
                            (all_anchors[:, 1] >= -allowed_border) &
@@ -186,11 +193,8 @@ def assign_quadrangle_anchor(feat_shape, gt_boxes, im_info, cfg, feat_stride=16,
             # overlaps = cpu_polygon_overlaps(anchors.astype(np.float32), gt_boxes[:, :8].astype(np.float32))
             overlaps = gpu_polygon_overlaps(anchors.astype(np.float32), gt_boxes[:, :8].astype(np.float32), current_context().device_id)
             # logger.debug("end polygon_overlaps")
-            # just for speed up
-            # logger.debug("pse start bbox_overlaps")
-            # overlaps = bbox_overlaps(get_horizen_minAreaRectangle(anchors).astype(np.float), get_horizen_minAreaRectangle(gt_boxes[:, :8]).astype(np.float))
         else:
-            overlaps = bbox_overlaps(anchors.astype(np.float), gt_boxes.astype(np.float))
+            overlaps = bbox_overlaps(anchors.astype(np.float), gt_boxes_bbox.astype(np.float))
 
         argmax_overlaps = overlaps.argmax(axis=1)
         max_overlaps = overlaps[np.arange(len(inds_inside)), argmax_overlaps]
@@ -237,17 +241,7 @@ def assign_quadrangle_anchor(feat_shape, gt_boxes, im_info, cfg, feat_stride=16,
         if inclined_anchor:
             bbox_targets[:] = bbox_transform_quadrangle(anchors, gt_boxes[argmax_overlaps, :box_dim])
         else:
-            # fyk: get 4-coord bbox from quadrangle gt
-            gt_boxes_bbox = np.zeros((gt_boxes.shape[0], 4), dtype=gt_boxes.dtype)
-
-            ex_x = np.vstack((gt_boxes[:, 0], gt_boxes[:, 2], gt_boxes[:, 4], gt_boxes[:, 6]))
-            ex_y = np.vstack((gt_boxes[:, 1], gt_boxes[:, 3], gt_boxes[:, 5], gt_boxes[:, 7]))
-            gt_boxes_bbox[:, 0] = np.amin(ex_x, axis=0)
-            gt_boxes_bbox[:, 1] = np.amin(ex_y, axis=0)
-            gt_boxes_bbox[:, 2] = np.amax(ex_x, axis=0)
-            gt_boxes_bbox[:, 3] = np.amax(ex_y, axis=0)
-            # fyk end
-            bbox_targets[:] = bbox_transform(anchors, gt_boxes_bbox[argmax_overlaps, :box_dim])
+            bbox_targets[:] = bbox_transform(anchors, gt_boxes_bbox[argmax_overlaps])
 
     bbox_weights = np.zeros((len(inds_inside), box_dim), dtype=np.float32)
     bbox_weights[labels == 1, :] = np.array(cfg.TRAIN.RPN_BBOX_WEIGHTS)
@@ -317,6 +311,15 @@ def assign_pyramid_quadrangle_anchor(feat_shapes, gt_boxes, im_info, cfg, feat_s
             ret[inds, :] = data
         return ret
 
+    gt_boxes_bbox = np.zeros((gt_boxes.shape[0], 4), dtype=gt_boxes.dtype)
+
+    ex_x = np.vstack((gt_boxes[:, 0], gt_boxes[:, 2], gt_boxes[:, 4], gt_boxes[:, 6]))
+    ex_y = np.vstack((gt_boxes[:, 1], gt_boxes[:, 3], gt_boxes[:, 5], gt_boxes[:, 7]))
+    gt_boxes_bbox[:, 0] = np.amin(ex_x, axis=0)
+    gt_boxes_bbox[:, 1] = np.amin(ex_y, axis=0)
+    gt_boxes_bbox[:, 2] = np.amax(ex_x, axis=0)
+    gt_boxes_bbox[:, 3] = np.amax(ex_y, axis=0)
+
     DEBUG = False
     im_info = im_info[0]
     scales = np.array(scales, dtype=np.float32)
@@ -366,15 +369,6 @@ def assign_pyramid_quadrangle_anchor(feat_shapes, gt_boxes, im_info, cfg, feat_s
         # for sigmoid classifier, ignore the 'background' class
         labels = np.empty((len(inds_inside),), dtype=np.float32)
         labels.fill(-1)
-
-        gt_boxes_bbox = np.zeros((gt_boxes.shape[0], 4), dtype=gt_boxes.dtype)
-
-        ex_x = np.vstack((gt_boxes[:, 0], gt_boxes[:, 2], gt_boxes[:, 4], gt_boxes[:, 6]))
-        ex_y = np.vstack((gt_boxes[:, 1], gt_boxes[:, 3], gt_boxes[:, 5], gt_boxes[:, 7]))
-        gt_boxes_bbox[:, 0] = np.amin(ex_x, axis=0)
-        gt_boxes_bbox[:, 1] = np.amin(ex_y, axis=0)
-        gt_boxes_bbox[:, 2] = np.amax(ex_x, axis=0)
-        gt_boxes_bbox[:, 3] = np.amax(ex_y, axis=0)
 
         fpn_anchors_fid = np.hstack((fpn_anchors_fid, len(inds_inside)))
         fpn_anchors = np.vstack((fpn_anchors, anchors))

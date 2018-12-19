@@ -122,9 +122,37 @@ def _angle_enum(anchor, angles):
     anchors = np.vstack([_add_angle(anchor, angles[i]) for i in range(len(angles))])
     return anchors
 
+def validate_clockwise_points(points):
+    """
+    Validates that the 4 points that a polygon are in clockwise order.
+    """
+
+    if len(points) != 8:
+        raise Exception("Points list not valid." + str(len(points)))
+
+    point = [
+        [int(points[0]), int(points[1])],
+        [int(points[2]), int(points[3])],
+        [int(points[4]), int(points[5])],
+        [int(points[6]), int(points[7])]
+    ]
+    edge = [
+        (point[1][0] - point[0][0]) * (point[1][1] + point[0][1]),
+        (point[2][0] - point[1][0]) * (point[2][1] + point[1][1]),
+        (point[3][0] - point[2][0]) * (point[3][1] + point[2][1]),
+        (point[0][0] - point[3][0]) * (point[0][1] + point[3][1])
+    ]
+
+    summatory = edge[0] + edge[1] + edge[2] + edge[3];
+    if summatory > 0:
+        return False
+    else:
+        return True
 
 if __name__ == '__main__':
     a = generate_rotate_anchors()
+    for x in a:
+        if not validate_clockwise_points(x): print 'no clockwise'
     # a = generate_rotate_anchors(base_size=8, ratios=[0.25,0.4])
     # from IPython import embed; embed()
     for i in range(len(a)):

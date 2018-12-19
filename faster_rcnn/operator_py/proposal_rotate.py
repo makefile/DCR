@@ -24,7 +24,7 @@ from rpn.generate_rotate_anchor import generate_rotate_anchors
 # from nms.nms import py_nms_wrapper, cpu_nms_wrapper, gpu_nms_wrapper
 from nms.nms_poly import cpu_nms_poly_wrapper, gpu_nms_poly_wrapper
 
-from dataset.ds_utils import filter_small_quadrangle_boxes, get_horizen_minAreaRectangle
+from dataset.ds_utils import *
 from utils.dplog import Logger as logger
 
 DEBUG = False
@@ -144,6 +144,11 @@ class ProposalOperator(mx.operator.CustomOp):
         proposals = proposals[keep, :]
         scores = scores[keep]
 
+        # fyk: remove non clockwise order boxes (some boxes are not normal quandrangle)
+        keep = filter_clockwise_boxes(proposals)
+        proposals = proposals[keep, :]
+        scores = scores[keep]
+
         # 4. sort all (proposal, score) pairs by score from highest to lowest
         # 5. take top pre_nms_topN (e.g. 6000)
         order = scores.ravel().argsort()[::-1]
@@ -180,7 +185,7 @@ class ProposalOperator(mx.operator.CustomOp):
         out_idx = 0
         if self._output_horizon_rois:
             # fyk: get bbox of quadrangle rois: [batch_idx, x1, y1, x2, y2, x3, y3, x4, y4]
-            bbox_proposals = get_horizen_minAreaRectangle(proposals)
+            bbox_proposals = get_horizon_minAreaRectangle(proposals)
             bbox_proposals = np.hstack((batch_inds, bbox_proposals))
             out_idx += 1
             self.assign(out_data[out_idx], req[out_idx], bbox_proposals.astype(np.float32, copy=False))

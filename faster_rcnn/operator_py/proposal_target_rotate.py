@@ -20,7 +20,7 @@ import cPickle
 from distutils.util import strtobool
 
 from core.rcnn_quadrangle import sample_rois_rotate
-from dataset.ds_utils import get_horizen_minAreaRectangle
+from dataset.ds_utils import get_horizon_minAreaRectangle
 
 DEBUG = False
 
@@ -81,7 +81,7 @@ class ProposalTargetQuadrangleOperator(mx.operator.CustomOp):
 
         if self._output_horizon_rois:
             # fyk: get bbox of quadrangle rois: [batch_idx, x1, y1, x2, y2, x3, y3, x4, y4]
-            bbox_proposals = get_horizen_minAreaRectangle(rois[:, 1:])
+            bbox_proposals = get_horizon_minAreaRectangle(rois[:, 1:])
             batch_inds = np.zeros((bbox_proposals.shape[0], 1), dtype=np.float32)
             bbox_proposals = np.hstack((batch_inds, bbox_proposals))
             out_idx = 4

@@ -15,6 +15,7 @@ import cPickle
 import os, sys
 import time
 import mxnet as mx
+from mxnet.context import current_context
 import numpy as np
 
 from module import MutableModule
@@ -22,9 +23,10 @@ from utils import image
 from bbox.bbox_transform import bbox_pred, clip_boxes
 from bbox.rbbox_transform import bbox_pred_quadrangle, clip_quadrangle_boxes
 from nms.nms import py_nms_wrapper, cpu_nms_wrapper, gpu_nms_wrapper
-from nms.polygon_nms import py_polygon_nms_wrapper
+from nms.nms_poly import cpu_nms_poly_wrapper, gpu_nms_poly_wrapper
 from utils.PrefetchingIter import PrefetchingIter
 import cv2
+from dataset import ds_utils
 
 class Predictor(object):
     def __init__(self, symbol, data_names, label_names,
@@ -156,7 +158,7 @@ def im_detect(predictor, data_batch, data_names, scales, cfg):
         pred_boxes_all.append(pred_boxes)
     return scores_all, pred_boxes_all, data_dict_all
 
-# TODO for quadrangle test
+# for quadrangle test
 def im_detect_quadrangle(predictor, data_batch, data_names, scales, cfg):
     output_all = predictor.predict(data_batch)
 
@@ -186,7 +188,7 @@ def im_detect_quadrangle(predictor, data_batch, data_names, scales, cfg):
     return scores_all, pred_boxes_all, data_dict_all
 
 
-# TODO for quadrangle test
+# for quadrangle test
 def pred_eval_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=False,
                           thresh=1e-3, logger=None, ignore_cache=True):
     """
@@ -257,8 +259,11 @@ def pred_eval_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=False,
                 temp_cls_boxes[:, 3] = np.amax(temp_cls_boxes_y, axis=0)
                 cls_dets = np.hstack((temp_cls_boxes, cls_scores))
                 cls_quadrangle_dets = np.hstack((cls_boxes, cls_scores))
-                keep = nms(cls_dets)
-                all_boxes[j][idx+delta] = cls_quadrangle_dets[keep, :]
+                if vis or draw:
+                    keep = nms(cls_dets)
+                    all_boxes[j][idx + delta] = cls_quadrangle_dets[keep, :]
+                else:
+                    all_boxes[j][idx+delta] = cls_quadrangle_dets
 
             if max_per_image > 0:
                 image_scores = np.hstack([all_boxes[j][idx+delta][:, -1]
@@ -300,7 +305,7 @@ def pred_eval_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=False,
     if logger:
         logger.info('evaluate detections: \n{}'.format(info_str))
 
-# TODO for dota test
+# for dota test
 def pred_eval_dota_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=False, draw_gt=False,
                           thresh=1e-3, logger=None, ignore_cache=True):
     """
@@ -333,7 +338,8 @@ def pred_eval_dota_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=F
         test_data = PrefetchingIter(test_data)
 
     #nms = py_nms_wrapper(cfg.TEST.NMS)
-    nms = py_polygon_nms_wrapper(cfg.TEST.NMS)
+    # nms = cpu_nms_poly_wrapper(cfg.TEST.NMS)
+    nms = gpu_nms_poly_wrapper(cfg.TEST.NMS, device_id=current_context().device_id)
 
     # limit detections to max_per_image over all classes
     max_per_image = cfg.TEST.max_per_image
@@ -365,10 +371,16 @@ def pred_eval_dota_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=F
                 indexes = np.where(scores[:, j] > thresh)[0]
                 cls_scores = scores[indexes, j, np.newaxis]
                 cls_boxes = boxes[indexes, 8:16] if cfg.CLASS_AGNOSTIC else boxes[indexes, j * 8:(j + 1) * 8]
+                # fyk: filter result
+                indexes = ds_utils.filter_clockwise_boxes(cls_boxes)
+                cls_scores = cls_scores[indexes]
+                cls_boxes = cls_boxes[indexes]
+
                 cls_quadrangle_dets = np.hstack((cls_boxes, cls_scores))
-                keep = nms(cls_quadrangle_dets)
-                all_boxes_vis[j][idx + delta] = cls_quadrangle_dets[keep, :]
                 all_boxes[j][idx+delta] = cls_quadrangle_dets
+                if vis or draw:
+                    keep = nms(cls_quadrangle_dets.astype(np.float32))
+                    all_boxes_vis[j][idx + delta] = cls_quadrangle_dets[keep, :]
 
             if max_per_image > 0:
                 image_scores = np.hstack([all_boxes[j][idx+delta][:, -1]
@@ -383,7 +395,7 @@ def pred_eval_dota_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=F
                 boxes_this_image = [[]] + [all_boxes_vis[j][idx+delta] for j in range(1, imdb.num_classes)]
                 vis_all_detection(data_dict['data'].asnumpy(), boxes_this_image, imdb.classes, scales[delta], cfg)
 
-            if draw:
+            if draw and False: # disabled
                 if not os.path.isdir(cfg.TEST.save_img_path):
                     os.mkdir(cfg.TEST.save_img_path)
                 # path = os.path.join(cfg.TEST.save_img_path, str(idx + delta) + '.jpg')
@@ -398,7 +410,7 @@ def pred_eval_dota_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=F
                     gt_boxes = gt_db['boxes']
                     draw_gt_boxes(im, gt_boxes)
 
-                print('draw det image to {}'.format(path))
+                # print('draw det image to {}'.format(path))
                 cv2.imwrite(path, im)
 
         idx += test_data.batch_size
@@ -420,9 +432,9 @@ def pred_eval_dota_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=F
         cPickle.dump(all_boxes, f, protocol=cPickle.HIGHEST_PROTOCOL)
 
     # imdb.draw_gt_and_detections(all_boxes, thresh=0.1)
-    # info_str = imdb.evaluate_detections(all_boxes)
-    info_str = ''
-    imdb.write_results_by_class(all_boxes, threshold=0.0)
+    info_str = imdb.evaluate_detections(all_boxes, draw=draw)
+    # info_str = ''
+    # imdb.write_results_by_class(all_boxes, threshold=0.0)
 
     if logger:
         logger.info('evaluate detections: \n{}'.format(info_str))

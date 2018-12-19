@@ -32,11 +32,14 @@ def poly_overlaps_cython(
         for n in range(N):
             box_i, box_j = boxes[n, :8], query_boxes[k, :8]
             overlaps[n, k] = _cpu_iou_poly(&box_i[0], &box_j[0])
-            # overlaps[n, k] = np.random.random()
+
     return overlaps
 
 
 def cpu_nms_poly(np.ndarray[np.float32_t, ndim=2] dets, np.float thresh):
+    if dets.shape[0] == 0:
+        return []
+
     cdef np.ndarray[np.float32_t, ndim=1] box_i, box_j
     cdef np.ndarray[np.float32_t, ndim=1] scores = dets[:, 8]
 

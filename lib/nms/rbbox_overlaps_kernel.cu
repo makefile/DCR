@@ -1,7 +1,9 @@
+//@deprecated('wrong result in some cases, do not use this, only suitable for vertical bbox')
 #include "gpu_nms_poly.hpp"
 #include <vector>
 #include <iostream>
 #include <cmath>
+#include <stdio.h>
 
 #define CUDA_CHECK(condition) \
   /* Code block avoids redefinition of cudaError_t error */ \
@@ -16,11 +18,11 @@
 int const threadsPerBlock = sizeof(unsigned long long) * 8;
 
 
-__device__ inline float trangle_area(const float * a, const float * b, const float * c) {
+__device__ inline float trangle_area(float const * a, float const * b, float const * c) {
   return ((a[0] - c[0]) * (b[1] - c[1]) - (a[1] - c[1]) * (b[0] - c[0]))/2.0;
 }
 
-__device__ inline float area(const float * int_pts, int num_of_inter) {
+__device__ inline float area(float const * int_pts, int num_of_inter) {
 
   float area = 0.0;
   for(int i = 0;i < num_of_inter - 2;i++) {
@@ -84,7 +86,7 @@ __device__ inline void reorder_pts(float * int_pts, int num_of_inter) {
   }
 
 }
-__device__ inline bool inter2line(const float * pts1, const float *pts2, int i, int j, float * temp_pts) {
+__device__ inline bool inter2line(float const * pts1, float const *pts2, int i, int j, float * temp_pts) {
 
   float a[2];
   float b[2];
@@ -128,7 +130,8 @@ __device__ inline bool inter2line(const float * pts1, const float *pts2, int i, 
   return true;
 }
 
-__device__ inline bool inrect(float pt_x, float pt_y, const float * pts) {
+// DO NOT USE THIS FUNCTION
+__device__ inline bool in_rect_only_suitable_for_integer(float pt_x, float pt_y, float const * pts) {
 
   double ab[2];
   double ad[2];
@@ -152,21 +155,163 @@ __device__ inline bool inrect(float pt_x, float pt_y, const float * pts) {
   abap = ab[0] * ap[0] + ab[1] * ap[1];
   adad = ad[0] * ad[0] + ad[1] * ad[1];
   adap = ad[0] * ap[0] + ad[1] * ap[1];
+  // BUG!! fyk: there has bug for coordinate such as judge (1,1) in [0.5, 0.5, 1.5, 0.5, 1.5, 1.5, 0.5, 1.5]
+  // maybe the value -1 is bad
   bool result = (abab - abap >=  -1) and (abap >= -1) and (adad - adap >= -1) and (adap >= -1);
   return result;
 }
+__device__ inline bool in_rect_only_suitable_for_convex_quadrangle(float pt_x, float pt_y, float const * pts) {
+    // https://blog.csdn.net/San_Junipero/article/details/79172260
+    // https://blog.csdn.net/laukaka/article/details/45168439
+    // float a = (B.x - A.x)*(y - A.y) - (B.y - A.y)*(x - A.x);
+    // float b = (C.x - B.x)*(y - B.y) - (C.y - B.y)*(x - B.x);
+    // float c = (D.x - C.x)*(y - C.y) - (D.y - C.y)*(x - C.x);
+    // float d = (A.x - D.x)*(y - D.y) - (A.y - D.y)*(x - D.x);
+//    float a = (pts[2] - pts[0])*(pt_y - pts[1]) - (pts[3] - pts[1])*(pt_x - pts[0]);
+//    float b = (pts[4] - pts[2])*(pt_y - pts[3]) - (pts[5] - pts[3])*(pt_x - pts[2]);
+//    float c = (pts[6] - pts[4])*(pt_y - pts[5]) - (pts[7] - pts[5])*(pt_x - pts[4]);
+//    float d = (pts[0] - pts[6])*(pt_y - pts[7]) - (pts[1] - pts[7])*(pt_x - pts[6]);
+//    if((a > 0 && b > 0 && c > 0 && d > 0) || (a < 0 && b < 0 && c < 0 && d < 0)) {
+//        return true;
+//    }
+//    return false;
 
-__device__ inline int inter_pts(const float * pts1, const float * pts2, float * int_pts) {
+// from https://stackoverflow.com/questions/2752725/finding-whether-a-point-lies-inside-a-rectangle-or-not
+//# Corners in ax,ay,bx,by,dx,dy
+//# Point in x, y
+//
+//bax = bx - ax
+//bay = by - ay
+//dax = dx - ax
+//day = dy - ay
+//
+//if ((x - ax) * bax + (y - ay) * bay < 0.0) return false
+//if ((x - bx) * bax + (y - by) * bay > 0.0) return false
+//if ((x - ax) * dax + (y - ay) * day < 0.0) return false
+//if ((x - dx) * dax + (y - dy) * day > 0.0) return false
+//
+//return true
+    float bax = pts[2] - pts[0];
+    float bay = pts[3] - pts[1];
+    float dax = pts[6] - pts[0];
+    float day = pts[7] - pts[1];
+
+    if ((pt_x - pts[0]) * bax + (pt_y - pts[1]) * bay < 0.0) return false;
+    if ((pt_x - pts[2]) * bax + (pt_y - pts[3]) * bay > 0.0) return false;
+    if ((pt_x - pts[0]) * dax + (pt_y - pts[1]) * day < 0.0) return false;
+    if ((pt_x - pts[6]) * dax + (pt_y - pts[7]) * day > 0.0) return false;
+
+    return true;
+
+}
+__device__ inline float cross_mul(float *pt1, float * pt2, float *pt3){
+    /* 叉积是判断多边形凹凸性以及点是否在凸多边形内部的利器。
+    叉积 https://blog.csdn.net/Mikchy/article/details/81490908
+    float cross_mul(const point_t &a, const point_t &b) {
+        return a.x * b.y - a.y * b.x;
+    }
+    float cross_mul(const point_t &a, const point_t &b, const point_t &c) {
+        return cross_mul(a - c, b - c);
+    }*/
+    return pt2[0]*pt3[1]+pt3[0]*pt1[1]+pt1[0]*pt2[1]-pt2[0]*pt1[1]-pt3[0]*pt2[1]-pt1[0]*pt3[1];
+}
+__device__ inline bool in_rect_convex(float pt_x, float pt_y, float * pts) {
+// also only suitable for convex quadrangle, not for non-convex quadrangle
+// https://blog.csdn.net/laukaka/article/details/45168439
+  bool flag = true;
+  int cur_sign;
+  float pt[2];
+  pt[0] = pt_x;
+  pt[1] = pt_y;
+  int sign;
+  for(int i = 0 ;i<4;i++){
+     float val = cross_mul(pts+i*2,pts+((i+1)%4*2),pt);
+     if(val<0.0f){
+        cur_sign = -1;
+     }else if(val>0.0f){
+        cur_sign = 1;
+     }else{
+        cur_sign =0;
+     }
+     if(cur_sign !=0){
+        if(flag){
+            flag = false;
+            sign = cur_sign;
+        }else{
+            if(sign!=cur_sign) return false; // not same sign, then not in convex rect
+        }
+     }
+  }
+  return true;
+}
+/* maybe the best answer for check point in polygon
+__device__ inline bool pointIsInPoly(Point p, Point polygon[], int n) {
+    bool isInside = false;
+    float minX = polygon[0].x, maxX = polygon[0].x;
+    float minY = polygon[0].y, maxY = polygon[0].y;
+    for (int i = 1; i < n; i++) {
+        Point q = polygon[n];
+        minX = Math.min(q.x, minX);
+        maxX = Math.max(q.x, maxX);
+        minY = Math.min(q.y, minY);
+        maxY = Math.max(q.y, maxY);
+    }
+    if (p.x < minX || p.x > maxX || p.y < minY || p.y > maxY) {
+        return false;
+    }
+    // the previous bounding box check can remove false-negatives in edge-cases
+    // remove the previous check code to speed up if you don't care of edge-cases
+    for (int i = 0, j = n - 1; i < n; j = i++) {
+        if ( (polygon[i].y > p.y) != (polygon[j].y > p.y) &&
+                p.x < (polygon[j].x - polygon[i].x) * (p.y - polygon[i].y) / (polygon[j].y - polygon[i].y) + polygon[i].x ) {
+            isInside = !isInside;
+        }
+    }
+
+    return isInside;
+} */
+
+__device__ inline bool in_rect(float pt_x, float pt_y, float * pts) {
+    // https://stackoverflow.com/questions/217578/how-can-i-determine-whether-a-2d-point-is-within-a-polygon
+    int n = 4; // 4 point
+    float minX = pts[0], maxX = pts[0];
+    float minY = pts[1], maxY = pts[1];
+    for (int i = 1; i < n; i++) {
+        float x = pts[i * 2], y = pts[i * 2 + 1];
+        minX = min(x, minX);
+        maxX = max(x, maxX);
+        minY = min(y, minY);
+        maxY = max(y, maxY);
+    }
+    if (pt_x < minX || pt_x > maxX || pt_y < minY || pt_y > maxY) {
+        return false;
+    }
+    bool isInside = false;
+    // the previous bounding box check can remove false-negatives in edge-cases
+    // remove the previous check code to speed up if you don't care of edge-cases
+    for (int i = 0, j = n - 1; i < n; j = i++) {
+        float ix = pts[i * 2], iy = pts[i * 2 + 1];
+        float jx = pts[j * 2], jy = pts[j * 2 + 1];
+        if ( (iy > pt_y) != (jy > pt_y) &&
+                pt_x < (jx - ix) * (pt_y - iy) / (jy - iy) + ix ) {
+            isInside = !isInside;
+        }
+    }
+
+    return isInside;
+}
+
+__device__ inline int inter_pts(float const * pts1, float const * pts2, float * int_pts) {
 
   int num_of_inter = 0;
 
   for(int i = 0;i < 4;i++) {
-    if(inrect(pts1[2 * i], pts1[2 * i + 1], pts2)) {
+    if(in_rect(pts1[2 * i], pts1[2 * i + 1], pts2)) {
       int_pts[num_of_inter * 2] = pts1[2 * i];
       int_pts[num_of_inter * 2 + 1] = pts1[2 * i + 1];
       num_of_inter++;
     }
-     if(inrect(pts2[2 * i], pts2[2 * i + 1], pts1)) {
+     if(in_rect(pts2[2 * i], pts2[2 * i + 1], pts1)) {
       int_pts[num_of_inter * 2] = pts2[2 * i];
       int_pts[num_of_inter * 2 + 1] = pts2[2 * i + 1];
       num_of_inter++;
@@ -202,12 +347,47 @@ __device__ inline int inter_pts(const float * pts1, const float * pts2, float * 
   return area(int_pts, num_of_inter);
 
 }*/
+/*
+__device__ inline void convert_region(float * pts , float const * const region) {
+
+  float angle = region[4];
+  float a_cos = cos(angle/180.0*3.1415926535);
+  float a_sin = -sin(angle/180.0*3.1415926535);// anti clock-wise
+
+  float ctr_x = region[0];
+  float ctr_y = region[1];
+  float h = region[2];
+  float w = region[3];
+
+
+
+  float pts_x[4];
+  float pts_y[4];
+
+  pts_x[0] = - w / 2;
+  pts_x[1] = - w / 2;
+  pts_x[2] = w / 2;
+  pts_x[3] = w / 2;
+
+  pts_y[0] = - h / 2;
+  pts_y[1] = h / 2;
+  pts_y[2] = h / 2;
+  pts_y[3] = - h / 2;
+
+  for(int i = 0;i < 4;i++) {
+    pts[2 * i] = a_cos * pts_x[i] - a_sin * pts_y[i] + ctr_x;
+    pts[2 * i + 1] = a_sin * pts_x[i] + a_cos * pts_y[i] + ctr_y;
+
+  }
+
+}
+*/
 
 __device__ inline float devRotateIoU(float const * const region1, float const * const region2) {
 
-  const float pts1[8] = {region1[0], region1[1], region1[2], region1[3],
+  const float pts1[] = {region1[0], region1[1], region1[2], region1[3],
                          region1[4], region1[5], region1[6], region1[7]};
-  const float pts2[8] = {region2[0], region2[1], region2[2], region2[3],
+  const float pts2[] = {region2[0], region2[1], region2[2], region2[3],
                          region2[4], region2[5], region2[6], region2[7]};
 
   float area1 = area(pts1, 4);
@@ -242,10 +422,8 @@ __global__ void overlaps_kernel(const int N, const int K, const int boxes_dim, c
   const int col_size =
         min(K - col_start * threadsPerBlock, threadsPerBlock);
 
-#define BOXES_DIM 8 // = boxes_dim
-
-  __shared__ float block_boxes[threadsPerBlock * BOXES_DIM];
-  __shared__ float block_query_boxes[threadsPerBlock * BOXES_DIM];
+  __shared__ float block_boxes[threadsPerBlock * 8];
+  __shared__ float block_query_boxes[threadsPerBlock * 8];
   if (threadIdx.x < col_size) {
     for (int dim=0; dim<boxes_dim; dim++){
         block_query_boxes[threadIdx.x * boxes_dim + dim] =
@@ -285,7 +463,7 @@ void _set_device(int device_id) {
 }
 
 
-void _overlaps(float* overlaps,const float* boxes,const float* query_boxes, int n, int k, int device_id) {
+void _rotate_overlaps(float* overlaps,const float* boxes,const float* query_boxes, int n, int k, int device_id) {
 
   _set_device(device_id);
 
@@ -332,4 +510,100 @@ void _overlaps(float* overlaps,const float* boxes,const float* query_boxes, int 
   CUDA_CHECK(cudaFree(boxes_dev));
   CUDA_CHECK(cudaFree(query_boxes_dev));
 
+}
+
+__global__ void rotate_nms_kernel(const int n_boxes, const int boxes_dim, const float nms_overlap_thresh,
+                           const float *dev_boxes, unsigned long long *dev_mask) {
+  const int row_start = blockIdx.y;
+  const int col_start = blockIdx.x;
+
+  // if (row_start > col_start) return;
+
+  const int row_size =
+        min(n_boxes - row_start * threadsPerBlock, threadsPerBlock);
+  const int col_size =
+        min(n_boxes - col_start * threadsPerBlock, threadsPerBlock);
+
+  // boxes_dim + 1 = 9
+  __shared__ float block_boxes[threadsPerBlock * 9];
+  if (threadIdx.x < col_size) {
+    for (int dim=0; dim<boxes_dim; dim++){
+        block_boxes[threadIdx.x * boxes_dim + dim] =
+            dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * boxes_dim + dim];
+    }
+  }
+  __syncthreads();
+
+  if (threadIdx.x < row_size) {
+    const int cur_box_idx = threadsPerBlock * row_start + threadIdx.x;
+    const float *cur_box = dev_boxes + cur_box_idx * boxes_dim;
+    int i = 0;
+    unsigned long long t = 0;
+    int start = 0;
+    if (row_start == col_start) {
+      start = threadIdx.x + 1;
+    }
+    for (i = start; i < col_size; i++) {
+      if (devRotateIoU(cur_box, block_boxes + i * boxes_dim) > nms_overlap_thresh) {
+        t |= 1ULL << i;
+      }
+    }
+    const int col_blocks = DIVUP(n_boxes, threadsPerBlock);
+    dev_mask[cur_box_idx * col_blocks + col_start] = t;
+  }
+}
+
+void _rotate_nms(int* keep_out, int* num_out, const float* boxes_host, int boxes_num,
+          int boxes_dim, float nms_overlap_thresh, int device_id) {
+  _set_device(device_id);
+
+  float* boxes_dev = NULL;
+  unsigned long long* mask_dev = NULL;
+
+  const int col_blocks = DIVUP(boxes_num, threadsPerBlock);
+
+  CUDA_CHECK(cudaMalloc(&boxes_dev,
+                        boxes_num * boxes_dim * sizeof(float)));
+  CUDA_CHECK(cudaMemcpy(boxes_dev,
+                        boxes_host,
+                        boxes_num * boxes_dim * sizeof(float),
+                        cudaMemcpyHostToDevice));
+
+  CUDA_CHECK(cudaMalloc(&mask_dev,
+                        boxes_num * col_blocks * sizeof(unsigned long long)));
+
+  dim3 blocks(DIVUP(boxes_num, threadsPerBlock),
+              DIVUP(boxes_num, threadsPerBlock));
+  dim3 threads(threadsPerBlock);
+  rotate_nms_kernel<<<blocks, threads>>>(boxes_num, boxes_dim,
+                                  nms_overlap_thresh,
+                                  boxes_dev,
+                                  mask_dev);
+
+  std::vector<unsigned long long> mask_host(boxes_num * col_blocks);
+  CUDA_CHECK(cudaMemcpy(&mask_host[0],
+                        mask_dev,
+                        sizeof(unsigned long long) * boxes_num * col_blocks,
+                        cudaMemcpyDeviceToHost));
+
+  std::vector<unsigned long long> remv(col_blocks);
+  memset(&remv[0], 0, sizeof(unsigned long long) * col_blocks);
+
+  int num_to_keep = 0;
+  for (int i = 0; i < boxes_num; i++) {
+    int nblock = i / threadsPerBlock;
+    int inblock = i % threadsPerBlock;
+
+    if (!(remv[nblock] & (1ULL << inblock))) {
+      keep_out[num_to_keep++] = i;
+      unsigned long long *p = &mask_host[0] + i * col_blocks;
+      for (int j = nblock; j < col_blocks; j++) {
+        remv[j] |= p[j];
+      }
+    }
+  }
+  *num_out = num_to_keep;
+
+  CUDA_CHECK(cudaFree(boxes_dev));
+  CUDA_CHECK(cudaFree(mask_dev));
 }

@@ -27,7 +27,7 @@ DEBUG = False
 
 
 class ProposalTargetQuadrangleOperator(mx.operator.CustomOp):
-    def __init__(self, num_classes, batch_images, batch_rois, cfg, fg_fraction):
+    def __init__(self, num_classes, batch_images, batch_rois, cfg, fg_fraction, output_horizon_target):
         super(ProposalTargetQuadrangleOperator, self).__init__()
         self._num_classes = num_classes
         self._batch_images = batch_images
@@ -35,6 +35,7 @@ class ProposalTargetQuadrangleOperator(mx.operator.CustomOp):
         self._cfg = cfg
         # FG_FRACTION = 0.25
         self._fg_fraction = fg_fraction
+        self._output_horizon_target = output_horizon_target
 
         if DEBUG:
             self._count = 0
@@ -89,8 +90,16 @@ class ProposalTargetQuadrangleOperator(mx.operator.CustomOp):
         # Sanity check: single batch only
         assert np.all(all_rois[:, 0] == 0), 'Only single item batches are supported'
 
-        rois, labels, bbox_targets, bbox_weights = \
-            sample_rois_quadrangle(all_rois, fg_rois_per_image, rois_per_image, self._num_classes, self._cfg, gt_boxes=gt_boxes)
+        if self._output_horizon_target:
+            output_blob = \
+                sample_rois_quadrangle(all_rois, fg_rois_per_image, rois_per_image, self._num_classes, self._cfg, gt_boxes=gt_boxes,
+                                   output_horizon_target=self._output_horizon_target)
+            # output_blob = [rois, labels, bbox_targets, bbox_weights, bbox_targets_h, bbox_weights_h]
+            # assert len(output_blob) == 6, len(output_blob)
+        else:
+            rois, labels, bbox_targets, bbox_weights = \
+                sample_rois_quadrangle(all_rois, fg_rois_per_image, rois_per_image, self._num_classes, self._cfg, gt_boxes=gt_boxes)
+            output_blob = [rois, labels, bbox_targets, bbox_weights]
 
         if DEBUG:
             print "labels=", labels
@@ -104,7 +113,7 @@ class ProposalTargetQuadrangleOperator(mx.operator.CustomOp):
             print 'num bg avg: {}'.format(self._bg_num / self._count)
             print 'ratio: {:.3f}'.format(float(self._fg_num) / float(self._bg_num))
 
-        for ind, val in enumerate([rois, labels, bbox_targets, bbox_weights]):
+        for ind, val in enumerate(output_blob):
             self.assign(out_data[ind], req[ind], val)
 
     def backward(self, req, out_grad, in_data, out_data, in_grad, aux):
@@ -114,19 +123,23 @@ class ProposalTargetQuadrangleOperator(mx.operator.CustomOp):
 
 @mx.operator.register('proposal_target_quadrangle')
 class ProposalTargetQuadrangleProp(mx.operator.CustomOpProp):
-    def __init__(self, num_classes, batch_images, batch_rois, cfg, fg_fraction='0.25'):
+    def __init__(self, num_classes, batch_images, batch_rois, cfg, fg_fraction='0.25', output_horizon_target='False'):
         super(ProposalTargetQuadrangleProp, self).__init__(need_top_grad=False)
         self._num_classes = int(num_classes)
         self._batch_images = int(batch_images)
         self._batch_rois = int(batch_rois)
         self._cfg = cPickle.loads(cfg)
         self._fg_fraction = float(fg_fraction)
+        self._output_horizon_target = strtobool(output_horizon_target)
 
     def list_arguments(self):
         return ['rois', 'gt_boxes']
 
     def list_outputs(self):
-        return ['rois_output', 'label', 'bbox_target', 'bbox_weight']
+        output_blob = ['rois_output', 'label', 'bbox_target', 'bbox_weight']
+        if self._output_horizon_target:
+            output_blob.extend(['bbox_target_h', 'bbox_weight_h'])
+        return output_blob
 
     def infer_shape(self, in_shape):
         rpn_rois_shape = in_shape[0]
@@ -138,12 +151,18 @@ class ProposalTargetQuadrangleProp(mx.operator.CustomOpProp):
         label_shape = (rois, )
         bbox_target_shape = (rois, self._num_classes * 8)
         bbox_weight_shape = (rois, self._num_classes * 8)
+        output_blob_shape = [output_rois_shape, label_shape, bbox_target_shape, bbox_weight_shape]
+
+        if self._output_horizon_target:
+            bbox_target_h_shape = (rois, self._num_classes * 4)
+            bbox_weight_h_shape = (rois, self._num_classes * 4)
+            output_blob_shape.extend([bbox_target_h_shape, bbox_weight_h_shape])
 
         return [rpn_rois_shape, gt_boxes_shape], \
-               [output_rois_shape, label_shape, bbox_target_shape, bbox_weight_shape]
+               output_blob_shape
 
     def create_operator(self, ctx, shapes, dtypes):
-        return ProposalTargetQuadrangleOperator(self._num_classes, self._batch_images, self._batch_rois, self._cfg, self._fg_fraction)
+        return ProposalTargetQuadrangleOperator(self._num_classes, self._batch_images, self._batch_rois, self._cfg, self._fg_fraction, self._output_horizon_target)
 
     def declare_backward_dependency(self, out_grad, in_data, out_data):
         return []

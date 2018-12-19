@@ -22,7 +22,7 @@ import cv2
 # import zipfile
 from PIL import Image
 import codecs
-from ds_utils import get_best_begin_point
+from ds_utils import get_best_begin_point, get_horizon_minAreaRectangle
 
 # the target of this class is to get DOTA roidb
 class DOTA(IMDB):
@@ -406,15 +406,11 @@ class DOTA_oriented(IMDB):
         return roi_rec
 
 
-    def evaluate_detections(self, detections):
+    def evaluate_detections(self, detections, draw=False):
         """
         :param detections: [cls][image] = N x [x1, y1, x2, y2, x3, y3, x4, y4, score]
         :return: 
         """
-        detection_results_path = os.path.join(self.result_path, 'test_results')
-        info = ''
-        if not os.path.isdir(detection_results_path):
-            os.mkdir(detection_results_path)
         # hmeam_max = 0.0
         # recall = 0.0
         # precision = 0.0
@@ -440,6 +436,9 @@ class DOTA_oriented(IMDB):
         # write_results_by_class will write to #cls num files
         # self.write_DOTA_results(detections, threshold=0.0)
         self.write_results_by_class(detections, threshold=0.0)
+        os.system("../DOTA_devkit/eval.py {} {} {}".format(self.result_path, 1, draw)) # task 1
+        os.system("../DOTA_devkit/eval.py {} {} {}".format(self.result_path, 2, draw)) # task 2
+        info = ''
         return info
 
     '''
@@ -582,13 +581,14 @@ class DOTA_oriented(IMDB):
         :param threshold: confidence
         :return: None
         """
-        path = os.path.join(self.result_path, 'test_results_by_class')
-        if os.path.isdir(path):
-            print "delete original test results files!"
-            os.system("rm -r {}".format(path))
-            os.mkdir(path)
-        if not os.path.exists(os.path.join(self.result_path, 'test_results_by_class')):
-            os.mkdir(os.path.join(self.result_path, 'test_results_by_class'))
+        path1 = os.path.join(self.result_path, 'test_results_by_class_task1')
+        path2 = os.path.join(self.result_path, 'test_results_by_class_task2')
+        # if os.path.isdir(path):
+            # print "delete original test results files!"
+            # os.system("rm -r {}".format(path))
+            # os.mkdir(path)
+        if not os.path.exists(path1): os.mkdir(path1)
+        if not os.path.exists(path2): os.mkdir(path2)
 
         total_dets_cnt = 0
         malformed_dets_cnt = 0
@@ -596,8 +596,8 @@ class DOTA_oriented(IMDB):
         for cls_ind, cls in enumerate(self.classes):
             if cls == '__background__':
                 continue
-            f = open(os.path.join(self.result_path, 'test_results_by_class',
-                                  'Task1_{}.txt'.format(cls)), 'a')
+            f1 = open(os.path.join(path1, 'Task1_{}.txt'.format(cls)), 'w')
+            f2 = open(os.path.join(path2, 'Task2_{}.txt'.format(cls)), 'w')
             for im_ind, index in enumerate(self.image_set_index):
                 dets = all_boxes[cls_ind][im_ind]
                 # if dets.shape[0] == 0:
@@ -605,25 +605,63 @@ class DOTA_oriented(IMDB):
                 img_base_name = os.path.splitext(os.path.basename(index))[0] # no postfix
 
                 total_dets_cnt += dets.shape[0]
+                bbox = get_horizon_minAreaRectangle(dets[:, :8])
                 # the VOCdevkit expects 1-based indices
                 for k in range(dets.shape[0]):
                     if dets[k, 8] <= threshold:
                         continue
                     if self.validate_clockwise_points(dets[k, 0:8]):
-                        f.write(
+                        f1.write(
                             # imgname score x1 y1 x2 y2 x3 y3 x4 y4
                             '{} {} {} {} {} {} {} {} {} {}\n'.format(img_base_name, dets[k, 8],
                                                                      int(dets[k, 0]), int(dets[k, 1]),
                                                                      int(dets[k, 2]), int(dets[k, 3]),
                                                                      int(dets[k, 4]), int(dets[k, 5]),
                                                                      int(dets[k, 6]), int(dets[k, 7])))
+                        f2.write(
+                            # imgname score xmin ymin xmax ymax
+                            '{} {} {} {} {} {}\n'.format(img_base_name, dets[k, 8],
+                                                                     int(bbox[k, 0]), int(bbox[k, 1]),
+                                                                     int(bbox[k, 2]), int(bbox[k, 3])))
                     else:
                         malformed_dets_cnt += 1
                         # print 'A detected box is anti-clockwise! Index:{}'.format(index)
                         # print dets[k, 0:8]
 
-            f.close()
+            f1.close()
+            f2.close()
 
         if malformed_dets_cnt > 0:
             print('detected anti-clockwise boxes / total boxes : {} / {}'
                   .format(malformed_dets_cnt, total_dets_cnt))
+
+# DOTA_oriented_c6 contains 8 coordinates, 6 classes
+class DOTA_oriented_c6(DOTA_oriented):
+    def __init__(self, image_set, root_path, data_path, result_path=None, mask_size=-1, binary_thresh=None):
+        """
+        fill basic information to initialize imdb
+        :param image_set: train, test etc.
+        :param root_path: 'selective_search_data' and 'cache'
+        :param data_path: data and results
+        :return: imdb object
+        """
+        self.name = 'DOTA_oriented_c6' + '_' + image_set
+        self.image_set = image_set
+        self.root_path = root_path
+        self.data_path = data_path
+        self._result_path = result_path
+
+        self.classes = ['__background__',  # always index 0
+                        'plane', 'bridge', 'large-vehicle',
+                        'ship', 'storage-tank', 'harbor']
+        self.num_classes = len(self.classes)
+        self.image_set_index = self.load_image_set_index()
+        self.num_images = len(self.image_set_index)
+        print 'num_images', self.num_images
+        print 'num_classes', self.num_classes
+        self.mask_size = mask_size
+        self.binary_thresh = binary_thresh
+
+        self.config = {'comp_id': 'comp4',
+                       'use_diff': False,
+                       'min_size': 2}

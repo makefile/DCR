@@ -28,15 +28,18 @@ from mxnet.context import current_context
 import numpy as np
 import numpy.random as npr
 
-from bbox.bbox_transform import bbox_overlaps
+from bbox.bbox_transform import bbox_overlaps, bbox_transform
 from bbox.rbbox_transform import bbox_transform_quadrangle
+from bbox.bbox_regression import expand_bbox_regression_targets
 from bbox.rbbox_regression import expand_bbox_regression_targets_quadrangle
 
 from nms.nms_poly import cpu_polygon_overlaps, gpu_polygon_overlaps
 from utils.dplog import Logger as logger
+# from dataset.ds_utils import get_horizon_minAreaRectangle
 
 def sample_rois_quadrangle(rois, fg_rois_per_image, rois_per_image, num_classes, cfg,
-                labels=None, overlaps=None, bbox_targets=None, gt_boxes=None):
+                labels=None, overlaps=None, bbox_targets=None, gt_boxes=None,
+                           output_horizon_target=False, bbox_targets_h=None):
     """
     generate random sample of ROIs comprising foreground and background examples
     pseudo quadrangle, the rois are indeed 2-point bbox
@@ -115,7 +118,23 @@ def sample_rois_quadrangle(rois, fg_rois_per_image, rois_per_image, num_classes,
     bbox_targets, bbox_weights = \
         expand_bbox_regression_targets_quadrangle(bbox_target_data, num_classes, cfg)
 
-    return rois, labels, bbox_targets, bbox_weights
+    output_blob = [rois, labels, bbox_targets, bbox_weights]
+    if output_horizon_target:
+        # load or compute bbox_target
+        if bbox_targets_h is not None:
+            bbox_target_data_h = bbox_targets_h[keep_indexes, :]
+        else:
+            targets_h = bbox_transform(rois[:, 1:], gt_boxes_bbox[gt_assignment[keep_indexes]])
+            if cfg.TRAIN.BBOX_NORMALIZATION_PRECOMPUTED:
+                targets_h = ((targets_h - np.array(cfg.TRAIN.BBOX_MEANS[:4]))
+                           / np.array(cfg.TRAIN.BBOX_STDS[:4]))
+            bbox_target_data_h = np.hstack((labels[:, np.newaxis], targets_h))
+
+        bbox_targets_h, bbox_weights_h = \
+            expand_bbox_regression_targets(bbox_target_data_h, num_classes, cfg)
+        output_blob.extend([bbox_targets_h, bbox_weights_h])
+
+    return output_blob
 
 
 def sample_rois_rotate(rois, fg_rois_per_image, rois_per_image, num_classes, cfg,

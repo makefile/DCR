@@ -136,6 +136,6 @@ def expand_bbox_regression_targets(bbox_targets_data, num_classes, cfg):
         start = int(4 * 1 if cls > 0 else 0) if cfg.CLASS_AGNOSTIC else int(4 * cls)
         end = start + 4
         bbox_targets[index, start:end] = bbox_targets_data[index, 1:]
-        bbox_weights[index, start:end] = cfg.TRAIN.BBOX_WEIGHTS
+        bbox_weights[index, start:end] = cfg.TRAIN.BBOX_WEIGHTS[:4] # fyk: can also be 4-bbox from 8-quadrangle
     return bbox_targets, bbox_weights
 

@@ -1,19 +1,18 @@
 ---
 MXNET_VERSION: "mxnet"
-output_path: "./output/rcnn/DOTA_quadrangle"
-symbol: resnet_v1_101_rcnn_quadrangle
+output_path: "./output/rcnn/DOTA_r2cnn_dist"
+symbol: resnet_v1_101_r2cnn
 #gpus: '0,1,2,3'
 gpus: 'all'
 CLASS_AGNOSTIC: true
-#CLASS_AGNOSTIC: false # for the author trained
-#RESIZE_TO_FIX_SIZE: true # not used by the project
-# if RESIZE_TO_FIX_SIZE is true, the SCALES means target size of width and height
+
 SCALES:
 - 1024
 - 1024
 default:
   frequent: 100
-  kvstore: device
+#  kvstore: device
+  kvstore: dist_device_sync
 network:
   pretrained: "./model/pretrained_model/resnet_v1_101"
   pretrained_epoch: 0
@@ -58,7 +57,7 @@ dataset:
   image_set: train
   root_path: "./data"
   test_image_set: val
-#  test_image_set: test
+  #  test_image_set: test
   proposal: rpn
 TRAIN:
   lr: 0.0005
@@ -81,6 +80,7 @@ TRAIN:
   SHUFFLE: true
   # whether use OHEM
   ENABLE_OHEM: true
+#  ENABLE_OHEM: false
   # size of images for each device, 2 for rcnn, 1 for rpn and e2e
   BATCH_IMAGES: 1
   # e2e changes behavior of anchor loader and metric
@@ -95,7 +95,8 @@ TRAIN:
   FG_FRACTION: 0.25
   FG_THRESH: 0.5
   BG_THRESH_HI: 0.5
-  BG_THRESH_LO: 0.1
+  # set to 0 for ohem, or set 0.1
+  BG_THRESH_LO: 0.0
   # rcnn bounding box regression params
   BBOX_REGRESSION_THRESH: 0.5
   BBOX_WEIGHTS:

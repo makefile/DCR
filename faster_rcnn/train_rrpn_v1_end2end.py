@@ -162,7 +162,11 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
 
 def main():
     print('Called with argument:', args)
-    ctx = [mx.gpu(int(i)) for i in config.gpus.split(',')]
+    if config.gpus == 'all':
+        gpus = mx.test_utils.list_gpus()
+    else:
+        gpus = [int(i) for i in config.gpus.split(',')]
+    ctx = [mx.gpu(i) for i in gpus]
     train_net(args, ctx, config.network.pretrained, config.network.pretrained_epoch, config.TRAIN.model_prefix,
               config.TRAIN.begin_epoch, config.TRAIN.end_epoch, config.TRAIN.lr, config.TRAIN.lr_step)
 

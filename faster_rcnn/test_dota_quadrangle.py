@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument('--draw_gt', help='turn on *draw GT boxes to image files*', action='store_true')
     parser.add_argument('--ignore_cache', help='ignore cached results boxes', action='store_true')
     parser.add_argument('--thresh', help='valid detection threshold', default=1e-3, type=float)
+    parser.add_argument('--epoch', help='test epoch index (start from 0)', default=0, type=int)
     parser.add_argument('--shuffle', help='shuffle data on visualization', action='store_true')
     args = parser.parse_args()
     return args
@@ -42,14 +43,23 @@ from function.test_rcnn_dota import test_rcnn_dota_quadrangle
 from utils.create_logger import create_logger
 
 
-def main():
-    ctx = [mx.gpu(int(i)) for i in config.gpus.split(',')]
+def main(ignore_cache=False):
+    if args.epoch == 0:
+        test_epoch = config.TEST.test_epoch
+    else:
+        test_epoch = args.epoch
+    if ignore_cache: args.ignore_cache = True
+    if config.gpus == 'all':
+        gpus = mx.test_utils.list_gpus()
+    else:
+        gpus = [int(i) for i in config.gpus.split(',')]
+    ctx = [mx.gpu(i) for i in gpus]
     print args
 
     logger, final_output_path = create_logger(config.output_path, args.cfg, config.dataset.test_image_set)
 
     test_rcnn_dota_quadrangle(config, config.dataset.dataset, config.dataset.test_image_set, config.dataset.root_path, config.dataset.dataset_path,
-              ctx, os.path.join(final_output_path, '..', '_'.join([iset for iset in config.dataset.image_set.split('+')]), config.TRAIN.model_prefix), config.TEST.test_epoch,
+              ctx, os.path.join(final_output_path, '..', '_'.join([iset for iset in config.dataset.image_set.split('+')]), config.TRAIN.model_prefix), test_epoch,
               args.vis, args.ignore_cache, args.shuffle, config.TEST.HAS_RPN, config.dataset.proposal, args.thresh, logger=logger, output_path=final_output_path,
                               draw=args.draw, draw_gt=args.draw_gt)
 
