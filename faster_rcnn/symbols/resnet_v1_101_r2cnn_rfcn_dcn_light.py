@@ -857,16 +857,19 @@ class resnet_v1_101_r2cnn_rfcn_dcn_light(Symbol):
         cls_score = mx.symbol.FullyConnected(name='cls_score', data=fc_new_1_relu, num_hidden=num_classes)
         bbox_pred = mx.symbol.FullyConnected(name='bbox_pred', data=fc_new_1_relu, num_hidden=num_reg_classes * 4)
         """
-
-        if is_train:
+        output_horizon = True
+        if is_train or output_horizon:
             # horizon_branch, the output_dim can be any num
             roi_pool = mx.contrib.sym.PSROIPooling(name='roi_pool', data=light_head, rois=rois, group_size=7,
                                                    pooled_size=7, output_dim=10, spatial_scale=0.0625)
             fc_new_1 = mx.symbol.FullyConnected(name='fc_new_1', data=roi_pool, num_hidden=2048)
             fc_new_1_relu = mx.sym.Activation(data=fc_new_1, act_type='relu', name='fc_new_1_relu')
             cls_score_h = mx.symbol.FullyConnected(name='cls_score_h', data=fc_new_1_relu, num_hidden=num_classes)
-            bbox_pred_h = mx.symbol.FullyConnected(name='bbox_pred_h', data=fc_new_1_relu, num_hidden=num_reg_classes * 4)
+            bbox_pred_h = mx.symbol.FullyConnected(name='bbox_pred_h', data=fc_new_1_relu,
+                                                   num_hidden=num_reg_classes * 4)
 
+        if is_train:
+            # quadrangle rotate branch
             if cfg.TRAIN.ENABLE_OHEM:
                 labels_ohem, bbox_weights_ohem = mx.sym.Custom(op_type='BoxAnnotatorOHEM', num_classes=num_classes,
                                                                num_reg_classes=num_reg_classes, roi_per_img=cfg.TRAIN.BATCH_ROIS_OHEM,
@@ -886,6 +889,7 @@ class resnet_v1_101_r2cnn_rfcn_dcn_light(Symbol):
             rcnn_label = mx.sym.Reshape(data=rcnn_label, shape=(cfg.TRAIN.BATCH_IMAGES, -1), name='label_reshape')
             cls_prob = mx.sym.Reshape(data=cls_prob, shape=(cfg.TRAIN.BATCH_IMAGES, -1, num_classes), name='cls_prob_reshape')
             bbox_loss = mx.sym.Reshape(data=bbox_loss, shape=(cfg.TRAIN.BATCH_IMAGES, -1, 8 * num_reg_classes), name='bbox_loss_reshape')
+
             # horizon branch
             if cfg.TRAIN.ENABLE_OHEM:
                 labels_ohem_h, bbox_weights_ohem_h = mx.sym.Custom(op_type='BoxAnnotatorOHEM', num_classes=num_classes,
@@ -916,7 +920,17 @@ class resnet_v1_101_r2cnn_rfcn_dcn_light(Symbol):
                                       name='cls_prob_reshape')
             bbox_pred = mx.sym.Reshape(data=bbox_pred, shape=(cfg.TEST.BATCH_IMAGES, -1, 8 * num_reg_classes),
                                        name='bbox_pred_reshape')
-            group = mx.sym.Group([rois, cls_prob, bbox_pred])
+
+            sym_list = [rois, cls_prob, bbox_pred]
+            if output_horizon:
+                cls_prob_h = mx.sym.SoftmaxActivation(name='cls_prob_h', data=cls_score_h)
+                cls_prob_h = mx.sym.Reshape(data=cls_prob_h, shape=(cfg.TEST.BATCH_IMAGES, -1, num_classes),
+                                          name='cls_prob_reshape_h')
+                bbox_pred_h = mx.sym.Reshape(data=bbox_pred_h, shape=(cfg.TEST.BATCH_IMAGES, -1, 4 * num_reg_classes),
+                                           name='bbox_pred_reshape_h')
+                sym_list.extend([cls_prob_h, bbox_pred_h])
+
+            group = mx.sym.Group(sym_list)
 
         self.sym = group
         return group

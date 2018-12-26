@@ -31,9 +31,10 @@ from generate_anchor import generate_anchors
 from generate_rotate_anchor import generate_rotate_anchors
 from bbox.bbox_transform import bbox_overlaps, bbox_transform
 from bbox.rbbox_transform import bbox_transform_quadrangle
-from nms.nms_poly import cpu_polygon_overlaps, gpu_polygon_overlaps
+from nms.nms_poly import *
 from dataset.ds_utils import get_horizon_minAreaRectangle
 from utils.dplog import Logger as logger
+from utils.tictoc import *
 
 def get_rpn_quadrangle_testbatch(roidb, cfg):
     """
@@ -95,7 +96,7 @@ def assign_quadrangle_anchor(feat_shape, gt_boxes, im_info, cfg, feat_stride=16,
     :return: dict of label
     'label': of shape (batch_size, 1) <- (batch_size, num_anchors, feat_height, feat_width)
     'bbox_target': of shape (batch_size, num_anchors * 4, feat_height, feat_width)
-    'bbox_inside_weight': *todo* mark the assigned anchors
+    'bbox_inside_weight': mark the assigned anchors
     'bbox_outside_weight': used to normalize the bbox_loss, all weights sums to RPN_POSITIVE_WEIGHT
     """
     def _unmap(data, count, inds, fill=0):
@@ -191,7 +192,12 @@ def assign_quadrangle_anchor(feat_shape, gt_boxes, im_info, cfg, feat_stride=16,
         if inclined_anchor:
             # logger.debug("start polygon_overlaps")
             # overlaps = cpu_polygon_overlaps(anchors.astype(np.float32), gt_boxes[:, :8].astype(np.float32))
-            overlaps = gpu_polygon_overlaps(anchors.astype(np.float32), gt_boxes[:, :8].astype(np.float32), current_context().device_id)
+            # tic()
+            # overlaps = gpu_polygon_overlaps(anchors.astype(np.float32), gt_boxes[:, :8].astype(np.float32), current_context().device_id)
+            # logger.debug("gpu_polygon_overlaps cost {} on device {}".format(toc(), current_context().device_id))
+            # tic()
+            overlaps = gpu_polygon_overlaps_r(anchors.astype(np.float32), gt_boxes[:, :8].astype(np.float32), current_context().device_id)
+            # logger.debug("gpu_polygon_overlaps_r cost {} on device {}".format(toc(), current_context().device_id))
             # logger.debug("end polygon_overlaps")
         else:
             overlaps = bbox_overlaps(anchors.astype(np.float), gt_boxes_bbox.astype(np.float))

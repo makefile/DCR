@@ -22,11 +22,11 @@ from distutils.util import strtobool
 from bbox.rbbox_transform import bbox_pred_quadrangle, clip_quadrangle_boxes
 from rpn.generate_rotate_anchor import generate_rotate_anchors
 # from nms.nms import py_nms_wrapper, cpu_nms_wrapper, gpu_nms_wrapper
-from nms.nms_poly import cpu_nms_poly_wrapper, gpu_nms_poly_wrapper
+from nms.nms_poly import *
 
 from dataset.ds_utils import *
 from utils.dplog import Logger as logger
-
+from utils.tictoc import *
 DEBUG = False
 
 
@@ -56,8 +56,9 @@ class ProposalOperator(mx.operator.CustomOp):
 
     def forward(self, is_train, req, in_data, out_data, aux):
         # nms = gpu_nms_wrapper(self._threshold, in_data[0].context.device_id)
-        nms = gpu_nms_poly_wrapper(self._threshold, in_data[0].context.device_id)
         # nms = cpu_nms_poly_wrapper(self._threshold)
+        # nms = gpu_nms_poly_wrapper(self._threshold, in_data[0].context.device_id)
+        nms_r = gpu_nms_poly_wrapper_r(self._threshold, in_data[0].context.device_id)
 
         batch_size = in_data[0].shape[0]
         if batch_size > 1:
@@ -162,7 +163,20 @@ class ProposalOperator(mx.operator.CustomOp):
         # 8. return the top proposals (-> RoIs top)
         det = np.hstack((proposals, scores)).astype(np.float32)
         # logger.debug("start poly nms")
-        keep = nms(det)
+        # tic()
+        # keep = nms(det)
+        keep = nms_r(det)
+        # compare
+        # logger.debug("gpu_nms_poly cost {} on device {}".format(toc(), in_data[0].context.device_id))
+        # tic()
+        # keep_r = nms_r(det)
+        # logger.debug("gpu_nms_poly_r cost {} on device {}".format(toc(), in_data[0].context.device_id))
+        # if keep_r != keep:
+        #     logger.info("gpu_nms_poly: {}".format(len(keep)))
+        #     logger.info("gpu_nms_poly_r: {}".format(len(keep_r)))
+        # else:
+        #     logger.info("nms same!")
+
         # logger.debug("pse start poly nms")
         # keep = [1] * det.shape[0]
         # logger.debug("end poly nms")

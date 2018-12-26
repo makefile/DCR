@@ -23,7 +23,7 @@ from utils import image
 from bbox.bbox_transform import bbox_pred, clip_boxes
 from bbox.rbbox_transform import bbox_pred_quadrangle, clip_quadrangle_boxes
 from nms.nms import py_nms_wrapper, cpu_nms_wrapper, gpu_nms_wrapper
-from nms.nms_poly import cpu_nms_poly_wrapper, gpu_nms_poly_wrapper
+from nms.nms_poly import *
 from utils.PrefetchingIter import PrefetchingIter
 import cv2
 from dataset import ds_utils
@@ -187,6 +187,44 @@ def im_detect_quadrangle(predictor, data_batch, data_names, scales, cfg):
         pred_boxes_all.append(pred_boxes)
     return scores_all, pred_boxes_all, data_dict_all
 
+# for quadrangle test, return quadrangle as well as horizon box (from R2CNN)
+def im_detect_quadrangle_with_bbox(predictor, data_batch, data_names, scales, cfg):
+    output_all = predictor.predict(data_batch)
+
+    data_dict_all = [dict(zip(data_names, idata)) for idata in data_batch.data]
+    scores_all = []
+    pred_boxes_all = []
+    scores_h_all = []
+    pred_boxes_h_all = []
+    for output, data_dict, scale in zip(output_all, data_dict_all, scales):
+        if cfg.TEST.HAS_RPN:
+            rois = output['rois_output'].asnumpy()[:, 1:]
+        else:
+            rois = data_dict['rois'].asnumpy().reshape((-1, 5))[:, 1:]
+        im_shape = data_dict['data'].shape
+
+        # save output
+        scores = output['cls_prob_reshape_output'].asnumpy()[0]
+        bbox_deltas = output['bbox_pred_reshape_output'].asnumpy()[0]
+        scores_h = output['cls_prob_reshape_h_output'].asnumpy()[0]
+        bbox_deltas_h = output['bbox_pred_reshape_h_output'].asnumpy()[0]
+
+        # post processing
+        pred_boxes = bbox_pred_quadrangle(rois, bbox_deltas)
+        pred_boxes = clip_quadrangle_boxes(pred_boxes, im_shape[-2:])
+        pred_boxes_h = bbox_pred(rois, bbox_deltas_h)
+        pred_boxes_h = clip_boxes(pred_boxes_h, im_shape[-2:])
+
+        # we used scaled image & roi to train, so it is necessary to transform them back
+        pred_boxes = pred_boxes / scale
+        pred_boxes_h = pred_boxes_h / scale
+
+        scores_all.append(scores)
+        pred_boxes_all.append(pred_boxes)
+        scores_h_all.append(scores_h)
+        pred_boxes_h_all.append(pred_boxes_h)
+    return scores_all, pred_boxes_all, scores_h_all, pred_boxes_h_all, data_dict_all
+
 
 # for quadrangle test
 def pred_eval_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=False,
@@ -318,15 +356,25 @@ def pred_eval_dota_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=F
     :param thresh: valid detection threshold
     :return:
     """
+    if 'r2cnn' in imdb.result_path:
+        output_horizon = True
+        print("r2cnn: with horizontal bbox.")
+    else:
+        print("bbox is got from bounding box of quadrangle.")
     # ignore_cache = True
     det_file = os.path.join(imdb.result_path, imdb.name + '_detections.pkl')
     if os.path.exists(det_file) and not ignore_cache:
-        with open(det_file, 'rb') as fid:
-            all_boxes = cPickle.load(fid)
         # imdb.count_ar()
         #imdb.check_transform()
         # imdb.draw_gt_and_detections(all_boxes, thresh=0.1)
-        info_str = imdb.evaluate_detections(all_boxes)
+        if output_horizon:
+            with open(det_file, 'rb') as fid:
+                all_boxes, all_boxes_h = cPickle.load(fid)
+            info_str = imdb.evaluate_detections_with_bbox(all_boxes, all_boxes_h, draw=draw)
+        else:
+            with open(det_file, 'rb') as fid:
+                all_boxes = cPickle.load(fid)
+            info_str = imdb.evaluate_detections(all_boxes, draw=draw)
         if logger:
             logger.info('evaluate detections: \n{}'.format(info_str))
         return
@@ -339,7 +387,8 @@ def pred_eval_dota_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=F
 
     #nms = py_nms_wrapper(cfg.TEST.NMS)
     # nms = cpu_nms_poly_wrapper(cfg.TEST.NMS)
-    nms = gpu_nms_poly_wrapper(cfg.TEST.NMS, device_id=current_context().device_id)
+    # nms = gpu_nms_poly_wrapper(cfg.TEST.NMS, device_id=current_context().device_id)
+    nms = gpu_nms_poly_wrapper_r(cfg.TEST.NMS, device_id=current_context().device_id)
 
     # limit detections to max_per_image over all classes
     max_per_image = cfg.TEST.max_per_image
@@ -352,6 +401,8 @@ def pred_eval_dota_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=F
                  for _ in range(imdb.num_classes)]
     all_boxes_vis = [[[] for _ in range(num_images)]
                  for _ in range(imdb.num_classes)]
+    all_boxes_h = [[[] for _ in range(num_images)]
+                 for _ in range(imdb.num_classes)]
 
     idx = 0
     data_time, net_time, post_time = 0.0, 0.0, 0.0
@@ -361,7 +412,10 @@ def pred_eval_dota_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=F
         t = time.time()
 
         scales = [iim_info[0, 2] for iim_info in im_info]
-        scores_all, boxes_all, data_dict_all= im_detect_quadrangle(predictor, data_batch, data_names, scales, cfg)
+        if output_horizon:
+            scores_all, boxes_all, scores_all_h, boxes_all_h, data_dict_all = im_detect_quadrangle_with_bbox(predictor, data_batch, data_names, scales, cfg)
+        else:
+            scores_all, boxes_all, data_dict_all= im_detect_quadrangle(predictor, data_batch, data_names, scales, cfg)
 
         t2 = time.time() - t
         t = time.time()
@@ -413,6 +467,23 @@ def pred_eval_dota_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=F
                 # print('draw det image to {}'.format(path))
                 cv2.imwrite(path, im)
 
+        if output_horizon:
+            for delta, (scores, boxes, data_dict) in enumerate(zip(scores_all_h, boxes_all_h, data_dict_all)):
+                for j in range(1, imdb.num_classes):
+                    indexes = np.where(scores[:, j] > thresh)[0]
+                    cls_scores = scores[indexes, j, np.newaxis]
+                    cls_boxes = boxes[indexes, 4:8] if cfg.CLASS_AGNOSTIC else boxes[indexes, j * 4:(j + 1) * 4]
+                    all_boxes_h[j][idx + delta] = np.hstack((cls_boxes, cls_scores))
+
+                if max_per_image > 0:
+                    image_scores = np.hstack([all_boxes_h[j][idx + delta][:, -1]
+                                              for j in range(1, imdb.num_classes)])
+                    if len(image_scores) > max_per_image:
+                        image_thresh = np.sort(image_scores)[-max_per_image]
+                        for j in range(1, imdb.num_classes):
+                            keep = np.where(all_boxes_h[j][idx + delta][:, -1] >= image_thresh)[0]
+                            all_boxes_h[j][idx + delta] = all_boxes_h[j][idx + delta][keep, :]
+
         idx += test_data.batch_size
         t3 = time.time() - t
         t = time.time()
@@ -428,11 +499,15 @@ def pred_eval_dota_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=F
     sys.stdout.write('\n')
     sys.stdout.flush()
 
-    with open(det_file, 'wb') as f:
-        cPickle.dump(all_boxes, f, protocol=cPickle.HIGHEST_PROTOCOL)
-
     # imdb.draw_gt_and_detections(all_boxes, thresh=0.1)
-    info_str = imdb.evaluate_detections(all_boxes, draw=draw)
+    if output_horizon:
+        with open(det_file, 'wb') as f:
+            cPickle.dump((all_boxes, all_boxes_h), f, protocol=cPickle.HIGHEST_PROTOCOL)
+        info_str = imdb.evaluate_detections_with_bbox(all_boxes, all_boxes_h, draw=draw)
+    else:
+        with open(det_file, 'wb') as f:
+            cPickle.dump(all_boxes, f, protocol=cPickle.HIGHEST_PROTOCOL)
+        info_str = imdb.evaluate_detections(all_boxes, draw=draw)
     # info_str = ''
     # imdb.write_results_by_class(all_boxes, threshold=0.0)
 

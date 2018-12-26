@@ -1,5 +1,6 @@
 import numpy as np
 cimport numpy as np
+from utils.funcutils import deprecated
 
 assert sizeof(int) == sizeof(np.int32_t)
 
@@ -7,6 +8,7 @@ cdef extern from "gpu_nms_poly.hpp":
     void _poly_nms(np.int32_t*, int*, np.float32_t*, int, int, float, int)
     void _poly_overlaps(np.float32_t*, np.float32_t*, np.float32_t*, int, int, int)
 
+@deprecated('wrong result in some cases')
 def poly_overlaps (np.ndarray[np.float32_t, ndim=2] boxes, np.ndarray[np.float32_t, ndim=2] query_boxes, np.int32_t device_id=0):
     assert boxes.shape[1] == 8 and query_boxes.shape[1] == 8
     cdef int N = boxes.shape[0]
@@ -15,6 +17,7 @@ def poly_overlaps (np.ndarray[np.float32_t, ndim=2] boxes, np.ndarray[np.float32
     _poly_overlaps(&overlaps[0, 0], &boxes[0, 0], &query_boxes[0, 0], N, K, device_id)
     return overlaps
 
+@deprecated('wrong result in some cases')
 def poly_gpu_nms(np.ndarray[np.float32_t, ndim=2] dets, np.float thresh,
             np.int32_t device_id=0):
     if dets.shape[0] == 0:

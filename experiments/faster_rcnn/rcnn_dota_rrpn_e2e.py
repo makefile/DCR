@@ -12,9 +12,9 @@ os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
 this_dir = os.path.dirname(__file__)
 sys.path.insert(0, os.path.join(this_dir, '..', '..', 'faster_rcnn'))
 
-import train_rrpn_v1_end2end
+import train_rrpn_end2end
 import test_dota_quadrangle
 
 if __name__ == "__main__":
-    train_rrpn_v1_end2end.main()
+    train_rrpn_end2end.main()
     test_dota_quadrangle.main(ignore_cache=True)

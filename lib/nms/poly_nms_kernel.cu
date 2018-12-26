@@ -18,7 +18,7 @@
 int const threadsPerBlock = sizeof(unsigned long long) * 8;
 
 
-#define maxn 510
+#define maxn 32
 #define eps 1E-5
 
 typedef struct Point{
@@ -46,8 +46,8 @@ __device__ inline void reverse(Point*ps, int n) {
     }
 }
 
-__device__ inline float cross(Point o,Point a,Point b){  //叉积
-    return (a.x-o.x)*(b.y-o.y)-(b.x-o.x)*(a.y-o.y);
+__device__ inline float cross(Point *o,Point *a,Point *b){  //叉积
+    return (a->x-o->x)*(b->y-o->y)-(b->x-o->x)*(a->y-o->y);
 }
 
 __device__ inline float area(Point* ps,int n){
@@ -58,29 +58,27 @@ __device__ inline float area(Point* ps,int n){
     }
     return res/2.0;
 }
-__device__ inline int lineCross(Point a,Point b,Point c,Point d,Point* p){
+__device__ inline int lineCross(Point *a,Point *b,Point *c,Point *d,Point* p){
     float s1,s2;
     s1=cross(a,b,c);
     s2=cross(a,b,d);
     if(sig(s1)==0&&sig(s2)==0) return 2;
     if(sig(s2-s1)==0) return 0;
-    p->x=(c.x*s2-d.x*s1)/(s2-s1);
-    p->y=(c.y*s2-d.y*s1)/(s2-s1);
+    p->x=(c->x*s2-d->x*s1)/(s2-s1);
+    p->y=(c->y*s2-d->y*s1)/(s2-s1);
     return 1;
 }
 //多边形切割
 //用直线ab切割多边形p，切割后的在向量(a,b)的左侧，并原地保存切割结果
 //如果退化为一个点，也会返回去,此时n为1
-__device__ inline void polygon_cut(Point*p,int* n_io,Point a,Point b){
-    Point pp[maxn]; // 这里不能使用 static 局部变量, 结果会错误, 因为第二次执行时不会被初始化,
-    // 另外多线程环境 static 局部变量可能会有问题.
-    memset(pp,0,sizeof(Point)*maxn);
+__device__ inline void polygon_cut(Point *pp, Point*p,int* n_io,Point a,Point b){
+
     int n = *n_io;
     int m=0;p[n]=p[0];
     for(int i=0;i<n;i++){
-        if(sig(cross(a,b,p[i]))>0) pp[m++]=p[i];
-        if(sig(cross(a,b,p[i]))!=sig(cross(a,b,p[i+1])))
-            lineCross(a,b,p[i],p[i+1],pp+m++);
+        if(sig(cross(&a,&b,&p[i]))>0) pp[m++]=p[i];
+        if(sig(cross(&a,&b,&p[i]))!=sig(cross(&a,&b,&p[i+1])))
+            lineCross(&a,&b,&p[i],&p[i+1],pp+m++);
     }
     n=0;
     for(int i=0;i<m;i++)
@@ -92,18 +90,18 @@ __device__ inline void polygon_cut(Point*p,int* n_io,Point a,Point b){
 }
 //---------------华丽的分隔线-----------------//
 //返回三角形oab和三角形ocd的有向交面积,o是原点//
-__device__ inline float triangleIntersectArea(Point a,Point b,Point c,Point d){
+__device__ inline float triangleIntersectArea(Point *pp,Point *p, Point a,Point b,Point c,Point d){
     Point o={0,0};
-    int s1=sig(cross(o,a,b));
-    int s2=sig(cross(o,c,d));
+    int s1=sig(cross(&o,&a,&b));
+    int s2=sig(cross(&o,&c,&d));
     if(s1==0||s2==0)return 0.0;//退化，面积为0
     if(s1==-1) swap(&a, &b);
     if(s2==-1) swap(&c, &d);
-    Point p[10]={o,a,b};
+    p[0] = o; p[1] = a; p[2] = b;
     int n=3;
-    polygon_cut(p,&n,o,c);
-    polygon_cut(p,&n,c,d);
-    polygon_cut(p,&n,d,o);
+    polygon_cut(pp, p,&n,o,c);
+    polygon_cut(pp, p,&n,c,d);
+    polygon_cut(pp, p,&n,d,o);
     float res=fabs(area(p,n));
     if(s1*s2==-1) res=-res;
     return res;
@@ -111,34 +109,48 @@ __device__ inline float triangleIntersectArea(Point a,Point b,Point c,Point d){
 
 //求两多边形的交面积
 __device__ inline float intersectArea(Point*ps1,int n1,Point*ps2,int n2){
-    if(area(ps1,n1)<0) reverse(ps1,n1);
-    if(area(ps2,n2)<0) reverse(ps2,n2);
+    Point pp[maxn]; // 这里不能使用 static 局部变量, 结果会错误, 因为第二次执行时不会被初始化,
+    // 另外多线程环境 static 局部变量可能会有问题.
+    //memset(pp,0,sizeof(Point)*maxn);
+    Point p[10];
     ps1[n1]=ps1[0];
     ps2[n2]=ps2[0];
     float res=0;
     for(int i=0;i<n1;i++){
         for(int j=0;j<n2;j++){
-            res+=triangleIntersectArea(ps1[i],ps1[i+1],ps2[j],ps2[j+1]);
+            res+=triangleIntersectArea(pp,p, ps1[i],ps1[i+1],ps2[j],ps2[j+1]);
         }
     }
     return res;//assume res is positive!
 }
 
 __device__ inline float devRotateIoU(float const * const p, float const * const q) {
-    Point ps1[maxn],ps2[maxn];
+    Point ps1[5],ps2[5];
     int n1 = 4;
     int n2 = 4;
     for (int i = 0; i < 4; i++) {
-        ps1[i].x = p[i * 2];
-        ps1[i].y = p[i * 2 + 1];
+        // enlarge to decrease the edge cases
+        ps1[i].x = p[i * 2];// * 100;
+        ps1[i].y = p[i * 2 + 1];// * 100;
 
-        ps2[i].x = q[i * 2];
-        ps2[i].y = q[i * 2 + 1];
+        ps2[i].x = q[i * 2];// * 100;
+        ps2[i].y = q[i * 2 + 1];// * 100;
     }
+    float area1 = area(ps1,n1);
+    float area2 = area(ps2,n2);
+    if(area1<0) {reverse(ps1,n1);area1 = area(ps1,n1);}
+    if(area2<0) {reverse(ps2,n2);area2 = area(ps2,n2);}
     float inter_area = intersectArea(ps1, n1, ps2, n2);
-    float union_area = fabs(area(ps1, n1)) + fabs(area(ps2, n2)) - inter_area;
-    float iou = inter_area / union_area;
+    float union_area = fabs(area1) + fabs(area2) - inter_area;
+    float iou = inter_area / (union_area + eps);
+    // there are some cases that cause the iou be NaN (maybe the box area is too tiny), so add eps.
     //printf("gpu calc iou = %.2f score [%.3f vs %.3f] inter_area=%.2f, union_area=%.2f\n", iou, p[8], q[8], inter_area, union_area);
+    /*if(iou < -0.1 || iou > 1.1) {
+        printf("gpu calc iou = %.2f inter:%.2f area1:%.2f area2:%.2f\n[%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f] [%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f]\n",
+            iou, inter_area, fabs(area1), fabs(area2),
+            p[0],p[1],p[2],p[3],p[4],p[5],p[6],p[7],
+            q[0],q[1],q[2],q[3],q[4],q[5],q[6],q[7]);
+    }*/
     return iou;
 }
 

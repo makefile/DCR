@@ -1,4 +1,4 @@
-//@deprecated('wrong result in some cases, do not use this, only suitable for vertical bbox')
+//@deprecated('wrong result in some cases')
 #include "gpu_nms_poly.hpp"
 #include <vector>
 #include <iostream>
@@ -271,24 +271,19 @@ __device__ inline bool pointIsInPoly(Point p, Point polygon[], int n) {
     return isInside;
 } */
 
-__device__ inline bool in_rect(float pt_x, float pt_y, float * pts) {
+__device__ inline bool in_rect(float pt_x, float pt_y, float const * pts) {
     // https://stackoverflow.com/questions/217578/how-can-i-determine-whether-a-2d-point-is-within-a-polygon
-    int n = 4; // 4 point
-    float minX = pts[0], maxX = pts[0];
-    float minY = pts[1], maxY = pts[1];
-    for (int i = 1; i < n; i++) {
-        float x = pts[i * 2], y = pts[i * 2 + 1];
-        minX = min(x, minX);
-        maxX = max(x, maxX);
-        minY = min(y, minY);
-        maxY = max(y, maxY);
-    }
+    float minX = fmin(fmin(pts[0],pts[2]),fmin(pts[4],pts[6]));
+    float maxX = fmax(fmax(pts[0],pts[2]),fmax(pts[4],pts[6]));
+    float minY = fmin(fmin(pts[1],pts[3]),fmin(pts[5],pts[7]));
+    float maxY = fmax(fmax(pts[1],pts[3]),fmax(pts[5],pts[7]));
     if (pt_x < minX || pt_x > maxX || pt_y < minY || pt_y > maxY) {
         return false;
     }
     bool isInside = false;
     // the previous bounding box check can remove false-negatives in edge-cases
     // remove the previous check code to speed up if you don't care of edge-cases
+    int n = 4; // point num
     for (int i = 0, j = n - 1; i < n; j = i++) {
         float ix = pts[i * 2], iy = pts[i * 2 + 1];
         float jx = pts[j * 2], jy = pts[j * 2 + 1];
@@ -384,11 +379,11 @@ __device__ inline void convert_region(float * pts , float const * const region) 
 */
 
 __device__ inline float devRotateIoU(float const * const region1, float const * const region2) {
-
-  const float pts1[] = {region1[0], region1[1], region1[2], region1[3],
-                         region1[4], region1[5], region1[6], region1[7]};
-  const float pts2[] = {region2[0], region2[1], region2[2], region2[3],
-                         region2[4], region2[5], region2[6], region2[7]};
+  // enlarge to decrease the edge cases
+  const float pts1[] = {region1[0] * 100, region1[1] * 100, region1[2] * 100, region1[3] * 100,
+                         region1[4] * 100, region1[5] * 100, region1[6] * 100, region1[7] * 100};
+  const float pts2[] = {region2[0] * 100, region2[1] * 100, region2[2] * 100, region2[3] * 100,
+                         region2[4] * 100, region2[5] * 100, region2[6] * 100, region2[7] * 100};
 
   float area1 = area(pts1, 4);
   float area2 = area(pts2, 4);
@@ -402,11 +397,11 @@ __device__ inline float devRotateIoU(float const * const region1, float const * 
 
   float area_inter = area(int_pts, num_of_inter);
 
-  float result = area_inter / (area1 + area2 - area_inter);
+  float result = area_inter / (area1 + area2 - area_inter + 1e-5);
 
-  if(result < 0) {
-    result = 0.0;
-  }
+//  if(result < 0) {
+//    result = 0.0;
+//  }
   return result;
 
 }

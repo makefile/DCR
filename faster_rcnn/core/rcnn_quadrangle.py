@@ -33,7 +33,7 @@ from bbox.rbbox_transform import bbox_transform_quadrangle
 from bbox.bbox_regression import expand_bbox_regression_targets
 from bbox.rbbox_regression import expand_bbox_regression_targets_quadrangle
 
-from nms.nms_poly import cpu_polygon_overlaps, gpu_polygon_overlaps
+from nms.nms_poly import *
 from utils.dplog import Logger as logger
 # from dataset.ds_utils import get_horizon_minAreaRectangle
 
@@ -156,11 +156,19 @@ def sample_rois_rotate(rois, fg_rois_per_image, rois_per_image, num_classes, cfg
     if labels is None:
         # logger.debug("pse start polygon_overlaps")
         # overlaps = cpu_polygon_overlaps(rois[:, 1:].astype(np.float32), gt_boxes[:, :8].astype(np.float32))
-        overlaps = gpu_polygon_overlaps(rois[:, 1:].astype(np.float32), gt_boxes[:, :8].astype(np.float32), current_context().device_id)
+        overlaps = gpu_polygon_overlaps_r(rois[:, 1:].astype(np.float32), gt_boxes[:, :8].astype(np.float32), current_context().device_id)
         # logger.debug("pse end polygon_overlaps")
         gt_assignment = overlaps.argmax(axis=1)
         overlaps = overlaps.max(axis=1)
         labels = gt_boxes[gt_assignment, 8]
+
+        # fyk check
+        # bad_ious = np.where((overlaps < -0.1) | (overlaps > 1.1))[0]
+        # if len(bad_ious):
+        #     bad_ious1 = np.where(overlaps < 0)[0]
+        #     bad_ious2 = np.where(overlaps > 1)[0]
+        #     logger.debug("gpu_polygon_overlaps calculation bad ious: {}, {}/{}"
+        #                  .format(len(bad_ious1), len(bad_ious2), len(overlaps)))
 
     # foreground RoI with FG_THRESH overlap
     fg_indexes = np.where(overlaps >= cfg.TRAIN.FG_THRESH)[0]

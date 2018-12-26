@@ -1,6 +1,6 @@
 from cpu_nms_poly import poly_overlaps_cython, cpu_nms_poly
 from gpu_nms_poly import poly_overlaps, poly_gpu_nms
-# from rbbox_overlaps import rbbox_overlaps
+from rbbox_overlaps import rbbox_overlaps, rotate_gpu_nms
 
 def cpu_nms_poly_wrapper(thresh):
     def _nms(dets):
@@ -18,6 +18,14 @@ def cpu_polygon_overlaps(boxes, query_boxes):
 def gpu_polygon_overlaps(boxes, query_boxes, device_id):
     return poly_overlaps(boxes, query_boxes, device_id)
 
+def gpu_polygon_overlaps_r(boxes, query_boxes, device_id):
+    return rbbox_overlaps(boxes, query_boxes, device_id)
+
+def gpu_nms_poly_wrapper_r(thresh, device_id):
+    def _nms(dets):
+        return rotate_gpu_nms(dets, thresh, device_id)
+    return _nms
+
 if __name__ == '__main__':
     import numpy as np
     # float num clockwise
@@ -26,6 +34,7 @@ if __name__ == '__main__':
     # IOU should be 0.142857
     print poly_overlaps_cython(boxes, query_boxes)
     print poly_overlaps(boxes, query_boxes, device_id=0)
+    print rbbox_overlaps(boxes, query_boxes, device_id=0)
     print '-' * 50
     # int num
     boxes = np.array([[0, 0, 2, 0, 2, 2, 0, 2]], dtype=np.float32)
@@ -33,6 +42,7 @@ if __name__ == '__main__':
     # IOU should be 0.142857
     print poly_overlaps_cython(boxes, query_boxes)
     print poly_overlaps(boxes, query_boxes, device_id=0)
+    print rbbox_overlaps(boxes, query_boxes, device_id=0)
     print '-' * 50
     # float num boxes: anti-clockwise
     boxes = np.array([[0, 1, 1, 1, 1, 0, 0, 0]], dtype=np.float32)
@@ -40,6 +50,7 @@ if __name__ == '__main__':
     # IOU should be 0.142857
     print poly_overlaps_cython(boxes, query_boxes)
     print poly_overlaps(boxes, query_boxes, device_id=0)
+    print rbbox_overlaps(boxes, query_boxes, device_id=0)
     print '-' * 50
     # random order
     boxes = np.array([[0, 1, 1, 0, 1, 1, 0, 0]], dtype=np.float32)
@@ -49,6 +60,7 @@ if __name__ == '__main__':
     print 'filtered bad box: ', len(keep)
     print poly_overlaps_cython(boxes, query_boxes)
     print poly_overlaps(boxes, query_boxes, device_id=0)
+    print rbbox_overlaps(boxes, query_boxes, device_id=0)
     print '-' * 50
     dets = np.array([
         [0, 100, 0, 0, 100, 0, 100, 100, 0.99],
@@ -64,6 +76,7 @@ if __name__ == '__main__':
     # IOU should be 0.142857
     print poly_overlaps_cython(boxes, query_boxes)
     print gpu_polygon_overlaps(boxes, query_boxes, device_id=0)
+    print rbbox_overlaps(boxes, query_boxes, device_id=0)
     print '-' * 50
     dets = np.array([[10.2,5.2, 55.2,5.2, 55.2,45.2, 10.2,45.2, 0.99],
                      [5.2, 10.2, 50.2, 5.2, 53.2, 25.2, 7.2, 40.2, 0.88]], dtype=np.float32)
@@ -91,5 +104,12 @@ if __name__ == '__main__':
                             6.72900000e+03, 7.98000000e+02, 6.71000000e+03, 7.98000000e+02]], dtype=np.float32)
     print poly_overlaps_cython(boxes, query_boxes)
     print poly_overlaps(boxes, query_boxes, device_id=0)
+    print rbbox_overlaps(boxes, query_boxes, device_id=0)
 
+    print '-' * 50
+    boxes = np.array([[576.1,576.1,686.9,512.1,750.9,622.9,640.1,686.9]], dtype=np.float32)
+    query_boxes = np.array([[792.0,746.0,799.0,746.0,799.0,799.0,792.0,799.0]], dtype=np.float32)
+    print poly_overlaps_cython(boxes, query_boxes)
+    print poly_overlaps(boxes, query_boxes, device_id=0)
+    print rbbox_overlaps(boxes, query_boxes, device_id=0)
 

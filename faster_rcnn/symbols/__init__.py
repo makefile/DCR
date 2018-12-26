@@ -2,5 +2,7 @@ import resnet_v1_101_rcnn
 import resnet_v1_101_rcnn_dcn
 import resnet_v1_101_rcnn_quadrangle
 import resnet_v1_101_rrpn_v1
+import resnet_v1_101_rrpn_v2
+import resnet_v2_50_rrpn_v2
 import resnet_v1_101_r2cnn
 import resnet_v1_101_r2cnn_rfcn_dcn_light

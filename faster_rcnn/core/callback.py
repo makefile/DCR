@@ -18,27 +18,43 @@ import sys
 
 
 class Speedometer(object):
-    def __init__(self, batch_size, frequent=50):
+    def __init__(self, batch_size, frequent=50, num_epoch=-1):
         self.batch_size = batch_size
         self.frequent = frequent
         self.init = False
         self.tic = 0
         self.last_count = 0
+        # add by fyk
+        self.num_epoch = num_epoch
+        self.total_run_secs = 0
+        self.total_run_batches = 0
+        self.total_nbatch = 0
 
     def __call__(self, param):
         """Callback to Show speed."""
+        self.total_run_batches += 1
         count = param.nbatch
         if self.last_count > count:
             self.init = False
+            # epoch end
+            self.total_nbatch = self.num_epoch * self.last_count
         self.last_count = count
 
         if self.init:
             if count % self.frequent == 0:
-                speed = self.frequent * self.batch_size / (time.time() - self.tic)
+                secs = time.time() - self.tic
+                self.total_run_secs += secs
+                remain_secs = (self.total_nbatch - self.total_run_batches) * self.total_run_secs / self.total_run_batches
+                speed = self.frequent * self.batch_size / secs
                 # s = ''
                 if param.eval_metric is not None:
                     name, value = param.eval_metric.get()
-                    s = "Epoch[%d] Batch [%d]\tSpeed: %.2f samples/sec\tTrain-" % (param.epoch, count, speed)
+                    if self.num_epoch > 0:
+                        s = "Epoch[%d] Batch [%d]\tSpeed: %.2f samples/sec\tTime: [%d+%d h]\tTrain-" % (param.epoch, count, speed,
+                                                                        int(self.total_run_secs/3600), int(remain_secs/3600))
+                    else:
+                        s = "Epoch[%d] Batch [%d]\tSpeed: %.2f samples/sec\tTrain-" % (param.epoch, count, speed)
+
                     for n, v in zip(name, value):
                         s += "%s=%f,\t" % (n, v)
                 else:

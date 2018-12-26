@@ -60,7 +60,6 @@ class ProposalTargetQuadrangleOperator(mx.operator.CustomOp):
         # Sanity check: single batch only
         assert np.all(all_rois[:, 0] == 0), 'Only single item batches are supported'
 
-        # TODO fyk check num of gt_boxes > 0, there are some images that do not have label cause the numpy warning
         rois, labels, bbox_targets, bbox_weights = \
             sample_rois_rotate(all_rois, fg_rois_per_image, rois_per_image, self._num_classes, self._cfg, gt_boxes=gt_boxes)
 

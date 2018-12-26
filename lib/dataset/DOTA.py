@@ -441,6 +441,56 @@ class DOTA_oriented(IMDB):
         info = ''
         return info
 
+    def evaluate_detections_with_bbox(self, all_boxes, all_boxes_h, threshold = 0, draw=False):
+        '''
+        write result as format accepted by DOTA_devkit and ODAI evaluation server
+        both quadrangle box and horizontal bbox
+        '''
+
+        path1 = os.path.join(self.result_path, 'test_results_by_class_task1')
+        path2 = os.path.join(self.result_path, 'test_results_by_class_task2')
+        if not os.path.exists(path1): os.mkdir(path1)
+        if not os.path.exists(path2): os.mkdir(path2)
+
+        for cls_ind, cls in enumerate(self.classes):
+            if cls == '__background__':
+                continue
+            f1 = open(os.path.join(path1, 'Task1_{}.txt'.format(cls)), 'w')
+            f2 = open(os.path.join(path2, 'Task2_{}.txt'.format(cls)), 'w')
+            for im_ind, index in enumerate(self.image_set_index):
+                img_base_name = os.path.splitext(os.path.basename(index))[0]  # no postfix
+                # the VOCdevkit expects 1-based indices
+                dets = all_boxes[cls_ind][im_ind]
+                for k in range(dets.shape[0]):
+                    if dets[k, 8] <= threshold:
+                        continue
+                    f1.write(
+                        # imgname score x1 y1 x2 y2 x3 y3 x4 y4
+                        '{} {} {} {} {} {} {} {} {} {}\n'.format(img_base_name, dets[k, 8],
+                                                                 int(dets[k, 0]), int(dets[k, 1]),
+                                                                 int(dets[k, 2]), int(dets[k, 3]),
+                                                                 int(dets[k, 4]), int(dets[k, 5]),
+                                                                 int(dets[k, 6]), int(dets[k, 7])))
+
+                dets_h = all_boxes_h[cls_ind][im_ind]
+                for k in range(dets_h.shape[0]):
+                    if dets_h[k, 4] <= threshold:
+                        continue
+
+                    f2.write(
+                        # imgname score xmin ymin xmax ymax
+                        '{} {} {} {} {} {}\n'.format(img_base_name, dets_h[k, 4],
+                                                     int(dets_h[k, 0]), int(dets_h[k, 1]),
+                                                     int(dets_h[k, 2]), int(dets_h[k, 3])))
+
+            f1.close()
+            f2.close()
+
+        os.system("../DOTA_devkit/eval.py {} {} {}".format(self.result_path, 1, draw))  # task 1
+        os.system("../DOTA_devkit/eval.py {} {} {}".format(self.result_path, 2, draw))  # task 2
+        info = ''
+        return info
+
     '''
     def draw_gt_and_detections(self, detections, thresh=0.2):
         # gt_folder = os.path.join(self.result_path, 'gt_on_image')

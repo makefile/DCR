@@ -151,9 +151,7 @@ ext_modules = [
                                      "'-fPIC'"]},
         include_dirs = [numpy_include, CUDA['include']]
     ),
-
-]
-'''Extension('rbbox_overlaps',
+    Extension('rbbox_overlaps',
         ['rbbox_overlaps_kernel.cu', 'rbbox_overlaps.pyx'],
         library_dirs=[CUDA['lib64']],
         libraries=['cudart'],
@@ -167,7 +165,9 @@ ext_modules = [
                                      "'-fPIC'"]},
         include_dirs = [numpy_include, CUDA['include']]
     ),
-'''
+
+]
+
 setup(
     name='nms',
     ext_modules=ext_modules,
