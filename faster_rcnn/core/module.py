@@ -975,12 +975,18 @@ class MutableModule(BaseModule):
         for epoch in range(begin_epoch, num_epoch):
             tic = time.time()
             eval_metric.reset()
+            cnt = 0
             for nbatch, data_batch in enumerate(train_data):
                 if monitor is not None:
                     monitor.tic()
+                # print 'start forward_backward: ', time.time()
                 self.forward_backward(data_batch)
                 self.update()
-                self.update_metric(eval_metric, data_batch.label)
+                # print '==end forward_backward: ', time.time()
+                if cnt % 1000 == 0: # fyk: decrease the frequency to speedup
+                    self.update_metric(eval_metric, data_batch.label)
+                cnt = cnt + 1
+                # self.update_metric(eval_metric, data_batch.label)
 
                 if monitor is not None:
                     monitor.toc_print()

@@ -40,6 +40,7 @@ import mxnet as mx
 from symbols import *
 from core import callback, metric
 from core.loader_quadrangle import QuadrangleAnchorLoader
+from core.threaded_loader_quadrangle import ThreadedQuadrangleAnchorLoader
 from core.module import MutableModule
 from utils.create_logger import create_logger
 from utils.load_data import merge_roidb, filter_roidb
@@ -77,7 +78,8 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
     roidb = filter_roidb(roidb, config)
 
     # load training data
-    train_data = QuadrangleAnchorLoader(feat_sym, roidb, config, batch_size=input_batch_size, shuffle=config.TRAIN.SHUFFLE, ctx=ctx,
+    # train_data = QuadrangleAnchorLoader(feat_sym, roidb, config, batch_size=input_batch_size, shuffle=config.TRAIN.SHUFFLE, ctx=ctx,
+    train_data = ThreadedQuadrangleAnchorLoader(feat_sym, roidb, config, batch_size=input_batch_size, shuffle=config.TRAIN.SHUFFLE, ctx=ctx,
                               feat_stride=config.network.RPN_FEAT_STRIDE, anchor_scales=config.network.ANCHOR_SCALES,
                               anchor_angles=config.network.ANCHOR_ANGLES, inclined_anchor=True,
                               anchor_ratios=config.network.ANCHOR_RATIOS, aspect_grouping=config.TRAIN.ASPECT_GROUPING)
