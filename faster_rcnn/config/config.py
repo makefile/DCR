@@ -28,6 +28,7 @@ config.SCALES = [(600, 1000)]  # first is scale (the shorter side); second is ma
 # default training
 config.default = edict()
 config.default.frequent = 20
+config.default.metric_update_freq = config.default.frequent
 config.default.kvstore = 'device'
 
 # network related params
@@ -141,6 +142,14 @@ config.TRAIN.BBOX_NORMALIZATION_PRECOMPUTED = False
 config.TRAIN.BBOX_MEANS = (0.0, 0.0, 0.0, 0.0)
 config.TRAIN.BBOX_STDS = (0.1, 0.1, 0.2, 0.2)
 
+# R2CNN
+config.TRAIN.expected_feat_stride = 8
+config.TRAIN.RPN_LOCATION_LOSS_WEIGHT = 0.5
+config.TRAIN.RPN_CLASSIFICATION_LOSS_WEIGHT = 2
+config.TRAIN.BINARY_MASK_LOSS_WEIGHT = 1
+config.TRAIN.FAST_RCNN_LOCATION_LOSS_WEIGHT = 4
+config.TRAIN.FAST_RCNN_CLASSIFICATION_LOSS_WEIGHT = 2
+
 config.TEST = edict()
 
 # R-CNN testing
@@ -176,7 +185,6 @@ config.TEST.test_epoch = 0
 
 
 def update_config(config_file):
-    exp_config = None
     with open(config_file) as f:
         exp_config = edict(yaml.load(f))
         for k, v in exp_config.items():

@@ -885,6 +885,7 @@ class MutableModule(BaseModule):
             epoch_end_callback=None, batch_end_callback=None, kvstore='local',
             optimizer='sgd', optimizer_params=(('learning_rate', 0.01),),
             eval_end_callback=None,
+            metric_update_freq=100, # fyk add
             eval_batch_end_callback=None, initializer=Uniform(0.01),
             arg_params=None, aux_params=None, allow_missing=False,
             force_rebind=False, force_init=False, begin_epoch=0, num_epoch=None,
@@ -983,7 +984,7 @@ class MutableModule(BaseModule):
                 self.forward_backward(data_batch)
                 self.update()
                 # print '==end forward_backward: ', time.time()
-                if cnt % 1000 == 0: # fyk: decrease the frequency to speedup
+                if cnt % metric_update_freq == 0: # fyk: decrease the frequency to speedup
                     self.update_metric(eval_metric, data_batch.label)
                 cnt = cnt + 1
                 # self.update_metric(eval_metric, data_batch.label)

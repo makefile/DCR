@@ -124,7 +124,7 @@ class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
         # count = 0
         for item in iter(data_queue.get, self.stop_word): # call get until met stop_word
             if self.stop_flag: break
-            print 'worker-{} get data idx-{}'.format(worker_id, item)
+            # print 'worker-{} get data idx-{}'.format(worker_id, item)
             data, label = self.get_batch_individual(item)
             # default param: block=True, allow block when queue is full; timeout=None, never timeout
             result_queue.put((data, label))
@@ -150,6 +150,9 @@ class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
                 # if worker.is_alive():
                     # logging.error('worker {} is join fail'.format(i))
                     # worker.terminate()
+
+    def __del__(self):
+        self.shutdown()
 
     @property
     def provide_data(self):

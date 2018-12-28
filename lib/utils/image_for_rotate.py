@@ -7,6 +7,7 @@ import numpy as np
 import os
 import cv2
 import random
+from math import ceil
 from image import resize, transform
 from bbox.rbbox_transform import clip_quadrangle_boxes
 
@@ -36,9 +37,16 @@ def get_image_quadrangle_bboxes(roidb, config, isTrain=True):
         max_size = config.SCALES[scale_ind][1]
         im, im_scale = resize(im, target_size, max_size, stride=config.network.IMAGE_STRIDE)
         im_tensor = transform(im, config.network.PIXEL_MEANS)
-        processed_ims.append(im_tensor)
-        # get rid of image scale here, original im_info = [im_tensor.shape[2], im_tensor.shape[3], im_scale]
         im_info = [im_tensor.shape[2], im_tensor.shape[3], im_scale]
+        # fyk align image for shape match in upsample layer
+        im_size_align = 16
+        new_im_height = int(ceil(im_tensor.shape[2] / float(im_size_align))) * im_size_align
+        new_im_width  = int(ceil(im_tensor.shape[3] / float(im_size_align))) * im_size_align
+        padded_im = np.zeros((1, 3, new_im_height, new_im_width), dtype=im_tensor.dtype)
+        padded_im[:, :, :im_tensor.shape[2], :im_tensor.shape[3]] = im_tensor
+        im_tensor = padded_im
+        processed_ims.append(im_tensor)
+
         if isTrain: new_rec['boxes'] = clip_quadrangle_boxes(np.round(roi_rec['boxes'].copy() * im_scale), im_info[:2])
         new_rec['im_info'] = im_info
         processed_roidb.append(new_rec)

@@ -1,10 +1,11 @@
 ---
-MXNET_VERSION: "mxnet"
-output_path: "./output/rcnn/DOTA_rrpn_v2"
-symbol: resnet_v1_101_rrpn_v2
+MXNET_VERSION: "--mxnet"
+output_path: "./output/rcnn/DOTA-c6_r2cnn_plus"
+symbol: resnet_v1_101_r2cnn_plus
 #gpus: '0,1,2,3'
 gpus: 'all'
 CLASS_AGNOSTIC: true
+
 SCALES:
 - 800
 - 800
@@ -42,22 +43,22 @@ network:
   - beta
   ANCHOR_RATIOS:
   - 0.5
+  - 0.25
+  - 0.17
   - 1
   - 2
+  - 4
+  - 6
   ANCHOR_SCALES:
+  - 4
   - 8
   - 16
   - 32
-  ANCHOR_ANGLES:
-  - -60
-  - -30
-  - 0
-  NUM_ANCHORS: 27
+  NUM_ANCHORS: 28
 dataset:
   NUM_CLASSES: 7
   dataset: DOTA_oriented_c6
-#  dataset_path: "./data/DOTA-c6_split_800"
-  dataset_path: "/data/fyk/DOTA/DOTA-c6_split_800"
+  dataset_path: "./data/DOTA-c6_split_800"
   image_set: train
   root_path: "./data"
   test_image_set: val
@@ -65,25 +66,27 @@ dataset:
   proposal: rpn
 TRAIN:
   lr: 0.0005
-#  lr_step: '45,52'
-  lr_step: '16,24'
+  lr_step: '45,52'
+#  lr_step: '16,24'
   lr_factor: 0.1
   warmup: true
   warmup_lr: 0.00005
   # typically we will use 1000 warmup step for single GPU on DOTA
   warmup_step: 1000
   begin_epoch: 0
-#  end_epoch: 60
-  end_epoch: 30
-  model_prefix: 'DOTA-c6_rrpn_v2'
+  end_epoch: 60
+#  end_epoch: 30
+  model_prefix: 'DOTA-c6_r2cnn_plus'
   # whether resume training
   RESUME: false
+#  RESUME: true
   # whether flip image, as for quadrangle image, we have to carefully decide whether to flip it
   FLIP: true
   # whether shuffle image
   SHUFFLE: true
   # whether use OHEM
   ENABLE_OHEM: true
+#  ENABLE_OHEM: false
   # size of images for each device, 2 for rcnn, 1 for rpn and e2e
   BATCH_IMAGES: 1
   # e2e changes behavior of anchor loader and metric
@@ -126,10 +129,6 @@ TRAIN:
   - 1.0
   - 1.0
   - 1.0
-  - 1.0
-  - 1.0
-  - 1.0
-  - 1.0
 
   RPN_POSITIVE_WEIGHT: -1.0
   # used for end2end training
@@ -141,7 +140,8 @@ TRAIN:
   RPN_MIN_SIZE: 0
 
   # approximate bounding box regression
-  BBOX_NORMALIZATION_PRECOMPUTED: false
+  #BBOX_NORMALIZATION_PRECOMPUTED: false
+  BBOX_NORMALIZATION_PRECOMPUTED: true
   BBOX_MEANS:
   - 0.0
   - 0.0
@@ -160,6 +160,15 @@ TRAIN:
   - 1.0
   - 1.0
   - 1.0
+
+  # R2CNN
+  expected_feat_stride: 8
+  RPN_LOCATION_LOSS_WEIGHT: 0.5
+  RPN_CLASSIFICATION_LOSS_WEIGHT: 2
+  BINARY_MASK_LOSS_WEIGHT: 1
+  FAST_RCNN_LOCATION_LOSS_WEIGHT: 4
+  FAST_RCNN_CLASSIFICATION_LOSS_WEIGHT: 2
+
 TEST:
   # use rpn to generate proposal
   HAS_RPN: true
@@ -178,6 +187,6 @@ TEST:
   PROPOSAL_MIN_SIZE: 0
   # RCNN nms
   NMS: 0.3
-#  test_epoch: 59
-  test_epoch: 30
+  test_epoch: 60
+#  test_epoch: 30
   save_img_path: 'data/vis'
