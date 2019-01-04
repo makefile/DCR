@@ -17,6 +17,7 @@ from symbols import *
 from dataset import *
 from core.loader import TestLoader
 from core.loader_quadrangle import QuadrangleTestLoader
+from core.threaded_loader_quadrangle import ThreadedQuadrangleTestLoader
 from core.tester_quadrangle import Predictor, pred_eval_quadrangle_multiscale, pred_eval_dota, pred_eval_dota_quadrangle
 from utils.load_model import load_param
 import numpy as np
@@ -155,7 +156,7 @@ def test_rcnn_dota_quadrangle(cfg, dataset, image_set, root_path, dataset_path,
 
     else:
         # get test data iter
-        test_data = QuadrangleTestLoader(roidb, cfg, batch_size=len(ctx), shuffle=shuffle, has_rpn=has_rpn)
+        test_data = ThreadedQuadrangleTestLoader(roidb, cfg, batch_size=len(ctx), shuffle=shuffle, has_rpn=has_rpn)
 
         # load model
         arg_params, aux_params = load_param(prefix, epoch, process=True)

@@ -10,12 +10,149 @@ import mxnet as mx
 from mxnet.executor_manager import _split_input_slice
 
 from config.config import config
-from rpn.rpn_rotate import get_rpn_batch_quadrangle, assign_quadrangle_anchor
+from rpn.rpn_rotate import get_rpn_quadrangle_testbatch, get_rpn_batch_quadrangle, assign_quadrangle_anchor
+from rcnn import get_rcnn_testbatch, get_rcnn_batch
 
 # import multiprocessing
 import threading
 import Queue
 import atexit
+
+class ThreadedQuadrangleTestLoader(mx.io.DataIter):
+    def __init__(self, roidb, config, batch_size=1, shuffle=False,
+                 has_rpn=False, n_thread = 7):
+        super(ThreadedQuadrangleTestLoader, self).__init__()
+
+        # save parameters as properties
+        self.cfg = config
+        self.roidb = roidb
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.has_rpn = has_rpn
+
+        # infer properties from roidb
+        self.size = len(self.roidb)
+        self.index = np.arange(self.size)
+
+        # decide data and label names (only for training)
+        if has_rpn:
+            self.data_name = ['data', 'im_info']
+        else:
+            self.data_name = ['data', 'rois']
+        self.label_name = None
+
+        # status variable for synchronization between get_data and get_label
+        self.cur = 0
+        self.data = None
+        self.label = []
+        self.im_info = None
+
+        # get first batch to fill in provide_data and provide_label
+        # self.reset()
+        self.data, _ = self.get_batch(self.cur)
+
+        self.n_thread = n_thread
+        self.result_q = Queue.Queue(maxsize=n_thread)
+        self.request_q = Queue.Queue()
+
+        self.stop_flag = False
+        self.worker_proc = None
+        self.stop_word = '==STOP--'
+        self.reset_process()
+
+    def _thread_start(self):
+        '''
+        create process for loading data to blocking queue
+        :return:
+        '''
+        self.stop_flag = False
+        self.worker_proc = [threading.Thread(target=self._worker,
+                                             args=[pid,
+                                                   self.request_q,
+                                                   self.result_q])
+                            for pid in range(self.n_thread)]
+        for worker in self.worker_proc:
+            worker.daemon = True
+            worker.start()
+
+    def _worker(self, worker_id, data_queue, result_queue):
+        for item in iter(data_queue.get, self.stop_word): # call get until met stop_word
+            if self.stop_flag: break
+            data, im_info = self.get_batch(item)
+            # default param: block=True, allow block when queue is full; timeout=None, never timeout
+            result_queue.put((data, im_info))
+
+    def reset_process(self):
+        items = range(0, len(self.index), self.batch_size)
+        [self.request_q.put(i) for i in items]
+        [self.request_q.put(self.stop_word) for pid in range(self.n_thread)]
+        self._thread_start()
+
+    @property
+    def provide_data(self):
+        return [[(k, v.shape) for k, v in zip(self.data_name, idata)] for idata in self.data]
+
+    @property
+    def provide_label(self):
+        return [None for _ in range(len(self.data))]
+
+    @property
+    def provide_data_single(self):
+        return [(k, v.shape) for k, v in zip(self.data_name, self.data[0])]
+
+    @property
+    def provide_label_single(self):
+        return None
+
+    def reset(self):
+        self.cur = 0
+        if self.shuffle:
+            np.random.shuffle(self.index)
+        self.reset_process()
+
+    def iter_next(self):
+        return self.cur < self.size
+
+    def next(self):
+        if self.iter_next():
+            self.data, self.im_info = self.result_q.get()
+            self.cur += self.batch_size
+            return self.im_info, mx.io.DataBatch(data=self.data, label=self.label,
+                                   pad=self.getpad(), index=self.getindex(),
+                                   provide_data=self.provide_data, provide_label=self.provide_label)
+        else:
+            raise StopIteration
+
+    def getindex(self):
+        return self.cur / self.batch_size
+
+    def getpad(self):
+        if self.cur + self.batch_size > self.size:
+            return self.cur + self.batch_size - self.size
+        else:
+            return 0
+
+    def get_batch(self, cur_from):
+        cur_to = min(cur_from + self.batch_size, self.size)
+        roidb = [self.roidb[self.index[i]] for i in range(cur_from, cur_to)]
+        if self.has_rpn:
+            data, label, im_info = get_rpn_quadrangle_testbatch(roidb, self.cfg)
+        else:
+            data, label, im_info = get_rcnn_testbatch(roidb, self.cfg)
+        data = [[mx.nd.array(idata[name]) for name in self.data_name] for idata in data]
+        return data, im_info
+
+    def get_batch_individual(self):
+        cur_from = self.cur
+        cur_to = min(cur_from + self.batch_size, self.size)
+        roidb = [self.roidb[self.index[i]] for i in range(cur_from, cur_to)]
+        if self.has_rpn:
+            data, label, im_info = get_rpn_quadrangle_testbatch(roidb, self.cfg)
+        else:
+            data, label, im_info = get_rcnn_testbatch(roidb, self.cfg)
+        self.data = [mx.nd.array(data[name]) for name in self.data_name]
+        self.im_info = im_info
+
 
 class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
     def __init__(self, feat_sym, roidb, cfg, batch_size=1, shuffle=False, ctx=None, work_load_list=None,
@@ -115,10 +252,10 @@ class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
         they are normal processes that will be terminated (and not joined) if non-daemonic processes have exited.
         '''
 
-        def cleanup():
-            self.stop_flag = True
+        # def cleanup():
+        #     self.stop_flag = True
             # self.shutdown()
-        atexit.register(cleanup)
+        # atexit.register(cleanup)
 
     def _worker(self, worker_id, data_queue, result_queue):
         # count = 0
@@ -172,7 +309,11 @@ class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
 
     def reset_process(self):
         self.shutdown()
-        [self.request_q.put(i) for i in range(0, len(self.index), self.batch_size)]
+        items = range(0, len(self.index), self.batch_size)
+        if len(self.index) % self.batch_size != 0:
+            # note that the num of items must be equal to next() calls num
+            items = items[:-1] # discard the last part of data
+        [self.request_q.put(i) for i in items]
         [self.request_q.put(self.stop_word) for pid in range(self.n_thread)]
         self._thread_start()
 
@@ -201,6 +342,7 @@ class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
         self.reset_process()
 
     def iter_next(self):
+        # only true if the remaining samples num can be divided by batch_size
         return self.cur + self.batch_size <= self.size
 
     def next(self):

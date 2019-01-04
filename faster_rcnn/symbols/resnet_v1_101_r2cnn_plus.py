@@ -831,6 +831,10 @@ class resnet_v1_101_r2cnn_plus(Symbol):
         FAST_RCNN_LOCATION_LOSS_WEIGHT = cfg.TRAIN.FAST_RCNN_LOCATION_LOSS_WEIGHT
         FAST_RCNN_CLASSIFICATION_LOSS_WEIGHT = cfg.TRAIN.FAST_RCNN_CLASSIFICATION_LOSS_WEIGHT
 
+        # force use CXX proposal layer
+        cfg.TEST.CXX_PROPOSAL = True
+        cfg.TRAIN.CXX_PROPOSAL = True
+
         # config alias for convenient
         num_classes = cfg.dataset.NUM_CLASSES
         num_reg_classes = (2 if cfg.CLASS_AGNOSTIC else num_classes)
@@ -925,6 +929,7 @@ class resnet_v1_101_r2cnn_plus(Symbol):
                 data=rpn_cls_score_reshape, mode="channel", name="rpn_cls_act")
             rpn_cls_act_reshape = mx.sym.Reshape(
                 data=rpn_cls_act, shape=(0, 2 * num_anchors, -1, 0), name='rpn_cls_act_reshape')
+
             if cfg.TRAIN.CXX_PROPOSAL:
                 rois = mx.contrib.sym.Proposal(
                     cls_prob=rpn_cls_act_reshape, bbox_pred=rpn_bbox_pred, im_info=im_info, name='rois',
@@ -986,7 +991,8 @@ class resnet_v1_101_r2cnn_plus(Symbol):
         fc_new_2_relu = mx.sym.Activation(data=fc_new_2, act_type='relu', name='fc_new_2_relu')
 
         # cls_score/bbox_pred
-        if is_train:
+        output_horizon = True
+        if is_train or output_horizon:
             # horizon_branch
             cls_score_h = mx.symbol.FullyConnected(name='cls_score_h', data=fc_new_2_relu, num_hidden=num_classes)
             bbox_pred_h = mx.symbol.FullyConnected(name='bbox_pred_h', data=fc_new_2_relu, num_hidden=num_reg_classes * 4)
@@ -1062,7 +1068,15 @@ class resnet_v1_101_r2cnn_plus(Symbol):
                                       name='cls_prob_reshape')
             bbox_pred = mx.sym.Reshape(data=bbox_pred, shape=(cfg.TEST.BATCH_IMAGES, -1, 8 * num_reg_classes),
                                        name='bbox_pred_reshape')
-            group = mx.sym.Group([rois, cls_prob, bbox_pred])
+            sym_list = [rois, cls_prob, bbox_pred]
+            if output_horizon:
+                cls_prob_h = mx.sym.SoftmaxActivation(name='cls_prob_h', data=cls_score_h)
+                cls_prob_h = mx.sym.Reshape(data=cls_prob_h, shape=(cfg.TEST.BATCH_IMAGES, -1, num_classes),
+                                            name='cls_prob_reshape_h')
+                bbox_pred_h = mx.sym.Reshape(data=bbox_pred_h, shape=(cfg.TEST.BATCH_IMAGES, -1, 4 * num_reg_classes),
+                                             name='bbox_pred_reshape_h')
+                sym_list.extend([cls_prob_h, bbox_pred_h])
+            group = mx.sym.Group(sym_list)
 
         self.sym = group
         return group

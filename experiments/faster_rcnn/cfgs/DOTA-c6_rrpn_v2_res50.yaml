@@ -1,5 +1,5 @@
 ---
-MXNET_VERSION: "mxnet"
+MXNET_VERSION: "mxnet-1.5.0"
 output_path: "./output/rcnn/DOTA_rrpn_v2_res50"
 symbol: resnet_v2_50_rrpn_v2
 #gpus: '0,1,2,3'

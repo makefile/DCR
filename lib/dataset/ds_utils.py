@@ -225,6 +225,15 @@ def get_best_begin_point(coordinate):
     sorted_idx = distances.argsort()
     return combinate[sorted_idx[0]].tolist()
 
+def filter_convex_boxes(boxes):
+    assert boxes.shape[1] == 8, "Points list shape not valid: " + str(boxes.shape[1])
+    areas = area(boxes, num_of_inter=4)
+    boxes_is_simple_convex = np.array([is_convex_polygon([(b[0], b[1]), (b[2], b[3]), (b[4], b[5]), (b[6], b[7])])
+                                       for b in boxes])
+    keep = np.where((areas >= 16) & (boxes_is_simple_convex == True))[0]
+
+    return keep
+
 def filter_clockwise_boxes(boxes):
     """
     Validates that the 4 points that a polygon are in clockwise order.

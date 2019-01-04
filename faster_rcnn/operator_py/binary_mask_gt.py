@@ -31,10 +31,11 @@ class BinaryMaskGTOperator(mx.operator.CustomOp):
 
     def fill_poly(self, img, gt_boxes, spatial_scale):
         areas = []
+        # [batch_idx, x1, y1, x2, y2, x3, y3, x4, y4] point in clockwise
         for b in gt_boxes:
-            a = np.array([ [b[0] * spatial_scale, b[1] * spatial_scale], [b[2] * spatial_scale, b[3] * spatial_scale],
-                           [b[4] * spatial_scale, b[5] * spatial_scale], [b[6] * spatial_scale, b[7] * spatial_scale] ],
-                         np.int32)
+            a = np.array([ [round(b[1] * spatial_scale), round(b[2] * spatial_scale)], [round(b[3] * spatial_scale), round(b[4] * spatial_scale)],
+                           [round(b[5] * spatial_scale), round(b[6] * spatial_scale)], [round(b[7] * spatial_scale), round(b[8] * spatial_scale)] ],
+                         np.int32) # numpy type for fillPoly must be integer
             areas.append(a)
 
         cv2.fillPoly(img, areas, color=1)

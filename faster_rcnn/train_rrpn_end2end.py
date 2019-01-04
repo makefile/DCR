@@ -164,6 +164,7 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
 
 
 def main():
+    print('mxnet version %s' % mx.__version__)
     print('Called with argument:', args)
     if config.gpus == 'all':
         gpus = mx.test_utils.list_gpus()
@@ -172,6 +173,7 @@ def main():
     ctx = [mx.gpu(i) for i in gpus]
     train_net(args, ctx, config.network.pretrained, config.network.pretrained_epoch, config.TRAIN.model_prefix,
               config.TRAIN.begin_epoch, config.TRAIN.end_epoch, config.TRAIN.lr, config.TRAIN.lr_step)
+    print('training over at %s' % time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time())))
 
 if __name__ == '__main__':
     main()

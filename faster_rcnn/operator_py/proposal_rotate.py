@@ -146,7 +146,7 @@ class ProposalOperator(mx.operator.CustomOp):
         scores = scores[keep]
 
         # fyk: remove non clockwise order boxes (some boxes are not normal quandrangle)
-        keep = filter_clockwise_boxes(proposals)
+        keep = filter_convex_boxes(proposals)
         proposals = proposals[keep, :]
         scores = scores[keep]
 

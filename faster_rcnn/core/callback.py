@@ -75,6 +75,9 @@ class Speedometer(object):
 def do_checkpoint(prefix, means, stds):
     def _callback(iter_no, sym, arg, aux):
         # fyk modify
+        # if 'bbox_pred_h_weight' in arg:
+            # horizon branch of R2CNN
+            # since our means are 0s, and stds are 1s, so we do not need to unnormalize
         # Faster R-CNN
         if 'bbox_pred_weight' in arg:
             arg['bbox_pred_weight_test'] = (arg['bbox_pred_weight'].T * mx.nd.array(stds)).T

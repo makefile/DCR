@@ -1,9 +1,10 @@
 ---
-MXNET_VERSION: "mxnet"
+MXNET_VERSION: "mxnet-1.5.0"
 output_path: "./output/rcnn/DOTA_rrpn_v2"
 symbol: resnet_v1_101_rrpn_v2
 #gpus: '0,1,2,3'
 gpus: 'all'
+#gpus: '0'
 CLASS_AGNOSTIC: true
 SCALES:
 - 800
@@ -56,8 +57,8 @@ network:
 dataset:
   NUM_CLASSES: 7
   dataset: DOTA_oriented_c6
-#  dataset_path: "./data/DOTA-c6_split_800"
-  dataset_path: "/data/fyk/DOTA/DOTA-c6_split_800"
+  dataset_path: "./data/DOTA-c6_split_800"
+#  dataset_path: "/data/fyk/DOTA/DOTA-c6_split_800"
   image_set: train
   root_path: "./data"
   test_image_set: val
@@ -83,7 +84,8 @@ TRAIN:
   # whether shuffle image
   SHUFFLE: true
   # whether use OHEM
-  ENABLE_OHEM: true
+#  ENABLE_OHEM: true
+  ENABLE_OHEM: false
   # size of images for each device, 2 for rcnn, 1 for rpn and e2e
   BATCH_IMAGES: 1
   # e2e changes behavior of anchor loader and metric
@@ -92,7 +94,8 @@ TRAIN:
   ASPECT_GROUPING: true
   # R-CNN
   # rcnn rois batch size, -1 for use all OHEM , or 128
-  BATCH_ROIS: -1
+  BATCH_ROIS: 128
+#  BATCH_ROIS: -1
   BATCH_ROIS_OHEM: 128
   # rcnn rois sampling params
   FG_FRACTION: 0.25
@@ -134,14 +137,16 @@ TRAIN:
   RPN_POSITIVE_WEIGHT: -1.0
   # used for end2end training
   # RPN proposal
-  CXX_PROPOSAL: false
+#  CXX_PROPOSAL: false
+  CXX_PROPOSAL: true
   RPN_NMS_THRESH: 0.7
   RPN_PRE_NMS_TOP_N: 6000
   RPN_POST_NMS_TOP_N: 300
   RPN_MIN_SIZE: 0
 
   # approximate bounding box regression
-  BBOX_NORMALIZATION_PRECOMPUTED: false
+#  BBOX_NORMALIZATION_PRECOMPUTED: false
+  BBOX_NORMALIZATION_PRECOMPUTED: true
   BBOX_MEANS:
   - 0.0
   - 0.0
@@ -166,7 +171,8 @@ TEST:
   # size of images for each device
   BATCH_IMAGES: 1
   # RPN proposal
-  CXX_PROPOSAL: false
+#  CXX_PROPOSAL: false
+  CXX_PROPOSAL: true
   RPN_NMS_THRESH: 0.7
   RPN_PRE_NMS_TOP_N: 6000
   RPN_POST_NMS_TOP_N: 300

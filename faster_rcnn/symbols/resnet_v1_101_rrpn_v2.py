@@ -820,12 +820,12 @@ class resnet_v1_101_rrpn_v2(Symbol):
                 data=rpn_cls_score_reshape, mode="channel", name="rpn_cls_act")
             rpn_cls_act_reshape = mx.sym.Reshape(
                 data=rpn_cls_act, shape=(0, 2 * num_anchors, -1, 0), name='rpn_cls_act_reshape')
-            assert cfg.TRAIN.CXX_PROPOSAL == False
+
             if cfg.TRAIN.CXX_PROPOSAL:
-                rois = mx.contrib.sym.Proposal(
+                rois = mx.contrib.sym.ProposalRotate(
                     cls_prob=rpn_cls_act_reshape, bbox_pred=rpn_bbox_pred, im_info=im_info, name='rois',
                     feature_stride=cfg.network.RPN_FEAT_STRIDE, scales=tuple(cfg.network.ANCHOR_SCALES),
-                    ratios=tuple(cfg.network.ANCHOR_RATIOS),
+                    ratios=tuple(cfg.network.ANCHOR_RATIOS), angles=tuple(cfg.network.ANCHOR_ANGLES),
                     rpn_pre_nms_top_n=cfg.TRAIN.RPN_PRE_NMS_TOP_N, rpn_post_nms_top_n=cfg.TRAIN.RPN_POST_NMS_TOP_N,
                     threshold=cfg.TRAIN.RPN_NMS_THRESH, rpn_min_size=cfg.TRAIN.RPN_MIN_SIZE)
             else:
@@ -855,12 +855,12 @@ class resnet_v1_101_rrpn_v2(Symbol):
                 data=rpn_cls_score_reshape, mode="channel", name="rpn_cls_prob")
             rpn_cls_prob_reshape = mx.sym.Reshape(
                 data=rpn_cls_prob, shape=(0, 2 * num_anchors, -1, 0), name='rpn_cls_prob_reshape')
-            assert cfg.TEST.CXX_PROPOSAL == False
+
             if cfg.TEST.CXX_PROPOSAL:
-                rois = mx.contrib.sym.Proposal(
+                rois = mx.contrib.sym.ProposalRotate(
                     cls_prob=rpn_cls_prob_reshape, bbox_pred=rpn_bbox_pred, im_info=im_info, name='rois',
                     feature_stride=cfg.network.RPN_FEAT_STRIDE, scales=tuple(cfg.network.ANCHOR_SCALES),
-                    ratios=tuple(cfg.network.ANCHOR_RATIOS),
+                    ratios=tuple(cfg.network.ANCHOR_RATIOS), angles=tuple(cfg.network.ANCHOR_ANGLES),
                     rpn_pre_nms_top_n=cfg.TEST.RPN_PRE_NMS_TOP_N, rpn_post_nms_top_n=cfg.TEST.RPN_POST_NMS_TOP_N,
                     threshold=cfg.TEST.RPN_NMS_THRESH, rpn_min_size=cfg.TEST.RPN_MIN_SIZE)
             else:

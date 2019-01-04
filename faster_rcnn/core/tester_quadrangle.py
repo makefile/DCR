@@ -360,6 +360,7 @@ def pred_eval_dota_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=F
         output_horizon = True
         print("r2cnn: with horizontal bbox.")
     else:
+        output_horizon = False
         print("bbox is got from bounding box of quadrangle.")
     # ignore_cache = True
     det_file = os.path.join(imdb.result_path, imdb.name + '_detections.pkl')
