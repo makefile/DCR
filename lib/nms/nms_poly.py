@@ -28,6 +28,8 @@ def gpu_nms_poly_wrapper_r(thresh, device_id):
 
 if __name__ == '__main__':
     import numpy as np
+    from dataset.ds_utils import filter_clockwise_boxes
+    '''
     # float num clockwise
     boxes = np.array([[0, 0, 1, 0, 1, 1, 0, 1]], dtype=np.float32)
     query_boxes = np.array([[0.5, 0.5, 1.5, 0.5, 1.5, 1.5, 0.5, 1.5]], dtype=np.float32)
@@ -55,9 +57,8 @@ if __name__ == '__main__':
     # random order
     boxes = np.array([[0, 1, 1, 0, 1, 1, 0, 0]], dtype=np.float32)
     query_boxes = np.array([[0.5, 1.5, 1.5, 1.5, 0.5, 0.5, 1.5, 0.5]], dtype=np.float32)
-    from dataset.ds_utils import filter_clockwise_boxes
     keep = filter_clockwise_boxes(query_boxes[:, :8])
-    print 'filtered bad box: ', len(keep)
+    print 'filtered box: ', len(keep)
     print poly_overlaps_cython(boxes, query_boxes)
     print poly_overlaps(boxes, query_boxes, device_id=0)
     print rbbox_overlaps(boxes, query_boxes, device_id=0)
@@ -112,4 +113,27 @@ if __name__ == '__main__':
     print poly_overlaps_cython(boxes, query_boxes)
     print poly_overlaps(boxes, query_boxes, device_id=0)
     print rbbox_overlaps(boxes, query_boxes, device_id=0)
-
+    '''
+    boxes = np.array([[4.4750000e+03, 2.2980000e+03, 4.6480000e+03, 2.2980000e+03, 4.6490000e+03,
+                        2.2980000e+03, 4.4870000e+03, 2.2980000e+03, 3.2260695e-03]], dtype=np.float32)
+    query_boxes = np.array([[4.44500000e+03, 2.29800000e+03, 4.62000000e+03, 2.29800000e+03,
+                             4.62100000e+03, 2.29800000e+03, 4.45500000e+03, 2.29800000e+03,
+                             2.80404254e-03]], dtype=np.float32)
+    # todo check IOU between [0,1], any bad value or warning would cause problem
+    print poly_overlaps_cython(boxes[:, :8], query_boxes[:, :8])
+    print poly_overlaps(boxes[:, :8], query_boxes[:, :8], device_id=0)
+    print rbbox_overlaps(boxes[:, :8], query_boxes[:, :8], device_id=0)
+    # the box is a line [5400, 3024, 5400, 3029, 5400, 3076, 5400, 3076]
+    boxes = np.array([[5.40000000e+03, 3.02400000e+03, 5.40000000e+03, 3.02900000e+03,
+                       5.40000000e+03, 3.07600000e+03, 5.40000000e+03, 3.07600000e+03, 2.32902286e-03]], dtype=np.float32)
+    query_boxes = boxes
+    keep = filter_clockwise_boxes(query_boxes[:, :8])
+    print poly_overlaps_cython(boxes[:, :8], query_boxes[:, :8])
+    print poly_overlaps(boxes[:, :8], query_boxes[:, :8], device_id=0)
+    print rbbox_overlaps(boxes[:, :8], query_boxes[:, :8], device_id=0)
+    # test same box IoU=0
+    boxes = np.array([[576.1, 576.1, 686.9, 512.1, 750.9, 622.9, 640.1, 686.9]], dtype=np.float32)
+    query_boxes = boxes
+    print poly_overlaps_cython(boxes, query_boxes)
+    print poly_overlaps(boxes, query_boxes, device_id=0)
+    print rbbox_overlaps(boxes, query_boxes, device_id=0)

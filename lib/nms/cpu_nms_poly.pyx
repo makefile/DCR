@@ -11,6 +11,7 @@ cimport numpy as np
 cdef extern from "cpu_polyiou.cxx":
     double _cpu_iou_poly(np.float32_t* p, np.float32_t* q)
 
+
 def poly_overlaps_cython(
         np.ndarray[np.float32_t, ndim=2] boxes,
         np.ndarray[np.float32_t, ndim=2] query_boxes):
@@ -77,3 +78,8 @@ def cpu_nms_poly(np.ndarray[np.float32_t, ndim=2] dets, np.float thresh):
                 suppressed[j] = 1
 
     return keep
+
+
+def iou_poly(np.ndarray[np.float32_t, ndim=1] box_i,
+             np.ndarray[np.float32_t, ndim=1] box_j):
+    return _cpu_iou_poly(&box_i[0], &box_j[0])

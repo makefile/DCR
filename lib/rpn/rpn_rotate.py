@@ -22,6 +22,7 @@ label =
      'bbox_weight': [batch_size, num_anchors, feat_height, feat_width]}
 """
 
+import mxnet as mx
 from mxnet.context import current_context
 import numpy as np
 import numpy.random as npr
@@ -65,14 +66,24 @@ def get_rpn_batch_quadrangle(roidb, cfg):
     im_array = imgs[0]
     im_info = np.array([roidb[0]['im_info']], dtype=np.float32)
 
-    # gt boxes: (x1, y1, x2, y2, x3, y3, x4, y4, cls)
-    if roidb[0]['gt_classes'].size > 0:
-        gt_inds = np.where(roidb[0]['gt_classes'] != 0)[0]
-        gt_boxes = np.empty((roidb[0]['boxes'].shape[0], 9), dtype=np.float32)
-        gt_boxes[:, 0:8] = roidb[0]['boxes'][gt_inds, :]
-        gt_boxes[:, 8] = roidb[0]['gt_classes'][gt_inds]
-    else:
-        gt_boxes = np.empty((0, 9), dtype=np.float32)
+    if cfg.box_type == cfg.BOX_TYPE_QUADRANGLE:
+        # gt boxes: (x1, y1, x2, y2, x3, y3, x4, y4, cls)
+        if roidb[0]['gt_classes'].size > 0:
+            gt_inds = np.where(roidb[0]['gt_classes'] != 0)[0]
+            gt_boxes = np.empty((roidb[0]['boxes'].shape[0], 9), dtype=np.float32)
+            gt_boxes[:, 0:8] = roidb[0]['boxes'][gt_inds, :]
+            gt_boxes[:, 8] = roidb[0]['gt_classes'][gt_inds]
+        else:
+            gt_boxes = np.empty((0, 9), dtype=np.float32)
+    else: # BOX_TYPE_ROTATE_RECTANGLE
+        # gt boxes: (x1, y1, x2, y2, h, cls)
+        if roidb[0]['gt_classes'].size > 0:
+            gt_inds = np.where(roidb[0]['gt_classes'] != 0)[0]
+            gt_boxes = np.empty((roidb[0]['boxes_rotate'].shape[0], 6), dtype=np.float32)
+            gt_boxes[:, 0:5] = roidb[0]['boxes_rotate'][gt_inds, :]
+            gt_boxes[:, 5] = roidb[0]['gt_classes'][gt_inds]
+        else:
+            gt_boxes = np.empty((0, 6), dtype=np.float32)
 
     data = {'data': im_array,
             'im_info': im_info}
@@ -82,7 +93,7 @@ def get_rpn_batch_quadrangle(roidb, cfg):
 
 
 def assign_quadrangle_anchor(feat_shape, gt_boxes, im_info, cfg, feat_stride=16,
-                  scales=(8, 16, 32), ratios=(0.5, 1, 2), angles=(-60, -30, 0, 30, 60, 90), inclined_anchor=False,
+                  scales=(8, 16, 32), ratios=(0.5, 1, 2), angles=(-60, -30, 0), inclined_anchor=False,
                              allowed_border=0):
     """
     assign ground truth boxes to anchor positions
@@ -196,7 +207,14 @@ def assign_quadrangle_anchor(feat_shape, gt_boxes, im_info, cfg, feat_stride=16,
             # overlaps = gpu_polygon_overlaps(anchors.astype(np.float32), gt_boxes[:, :8].astype(np.float32), current_context().device_id)
             # logger.debug("gpu_polygon_overlaps cost {} on device {}".format(toc(), current_context().device_id))
             # tic()
-            overlaps = gpu_polygon_overlaps_r(anchors.astype(np.float32), gt_boxes[:, :8].astype(np.float32), current_context().device_id)
+            if cfg.gpus == 'all':
+                gpus = mx.test_utils.list_gpus()
+            else:
+                gpus = [int(i) for i in cfg.gpus.split(',')]
+            # this function is run on main thread of python, so that the current_context().device_id always be 0
+            # so we random choose 1 gpu
+            device_id = npr.choice(gpus, size=1)[0]
+            overlaps = gpu_polygon_overlaps_r(anchors.astype(np.float32), gt_boxes[:, :8].astype(np.float32), device_id)
             # logger.debug("gpu_polygon_overlaps_r cost {} on device {}".format(toc(), current_context().device_id))
             # logger.debug("end polygon_overlaps")
         else:

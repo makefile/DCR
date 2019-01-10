@@ -10,7 +10,7 @@ SCALES:
 - 800
 - 800
 default:
-  frequent: 100
+  frequent: 200
   metric_update_freq: 1000
   kvstore: device
 network:
@@ -22,7 +22,8 @@ network:
   - 123.15
   IMAGE_STRIDE: 0
   RCNN_FEAT_STRIDE: 16
-  RPN_FEAT_STRIDE: 16
+  RPN_FEAT_STRIDE: 8
+  expected_feat_stride: 8
   FIXED_PARAMS:
   - conv1
   - bn_conv1
@@ -85,8 +86,8 @@ TRAIN:
   # whether shuffle image
   SHUFFLE: true
   # whether use OHEM
-  ENABLE_OHEM: true
-#  ENABLE_OHEM: false
+#  ENABLE_OHEM: true
+  ENABLE_OHEM: false
   # size of images for each device, 2 for rcnn, 1 for rpn and e2e
   BATCH_IMAGES: 1
   # e2e changes behavior of anchor loader and metric
@@ -95,7 +96,8 @@ TRAIN:
   ASPECT_GROUPING: true
   # R-CNN
   # rcnn rois batch size, -1 for use all OHEM , or 128
-  BATCH_ROIS: -1
+#  BATCH_ROIS: -1
+  BATCH_ROIS: 128
   BATCH_ROIS_OHEM: 128
   # rcnn rois sampling params
   FG_FRACTION: 0.25
@@ -133,10 +135,10 @@ TRAIN:
   RPN_POSITIVE_WEIGHT: -1.0
   # used for end2end training
   # RPN proposal
-  CXX_PROPOSAL: false
+  CXX_PROPOSAL: true
   RPN_NMS_THRESH: 0.7
-  RPN_PRE_NMS_TOP_N: 6000
-  RPN_POST_NMS_TOP_N: 300
+  RPN_PRE_NMS_TOP_N: 12000
+  RPN_POST_NMS_TOP_N: 2000
   RPN_MIN_SIZE: 0
 
   # approximate bounding box regression
@@ -162,8 +164,7 @@ TRAIN:
   - 1.0
 
   # R2CNN
-  expected_feat_stride: 8
-  RPN_LOCATION_LOSS_WEIGHT: 0.5
+  RPN_LOCATION_LOSS_WEIGHT: 1
   RPN_CLASSIFICATION_LOSS_WEIGHT: 2
   BINARY_MASK_LOSS_WEIGHT: 1
   FAST_RCNN_LOCATION_LOSS_WEIGHT: 4
@@ -175,7 +176,7 @@ TEST:
   # size of images for each device
   BATCH_IMAGES: 1
   # RPN proposal
-  CXX_PROPOSAL: false
+  CXX_PROPOSAL: true
   RPN_NMS_THRESH: 0.7
   RPN_PRE_NMS_TOP_N: 6000
   RPN_POST_NMS_TOP_N: 300
@@ -188,5 +189,5 @@ TEST:
   # RCNN nms
   NMS: 0.3
 #  test_epoch: 60
-  test_epoch: 24
+  test_epoch: 30
   save_img_path: 'data/vis'

@@ -169,7 +169,7 @@ def im_detect_quadrangle(predictor, data_batch, data_names, scales, cfg):
         if cfg.TEST.HAS_RPN:
             rois = output['rois_output'].asnumpy()[:, 1:]
         else:
-            rois = data_dict['rois'].asnumpy().reshape((-1, 5))[:, 1:]
+            rois = data_dict['rois'].asnumpy().reshape((-1, 9))[:, 1:]
         im_shape = data_dict['data'].shape
 
         # save output
@@ -200,7 +200,7 @@ def im_detect_quadrangle_with_bbox(predictor, data_batch, data_names, scales, cf
         if cfg.TEST.HAS_RPN:
             rois = output['rois_output'].asnumpy()[:, 1:]
         else:
-            rois = data_dict['rois'].asnumpy().reshape((-1, 5))[:, 1:]
+            rois = data_dict['rois'].asnumpy().reshape((-1, 9))[:, 1:]
         im_shape = data_dict['data'].shape
 
         # save output
@@ -509,8 +509,6 @@ def pred_eval_dota_quadrangle(predictor, test_data, imdb, cfg, vis=False, draw=F
         with open(det_file, 'wb') as f:
             cPickle.dump(all_boxes, f, protocol=cPickle.HIGHEST_PROTOCOL)
         info_str = imdb.evaluate_detections(all_boxes, draw=draw)
-    # info_str = ''
-    # imdb.write_results_by_class(all_boxes, threshold=0.0)
 
     if logger:
         logger.info('evaluate detections: \n{}'.format(info_str))

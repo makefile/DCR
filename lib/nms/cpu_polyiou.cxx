@@ -21,7 +21,8 @@ void swap(Point* ps1, Point* ps2) {
 }
 void reverse(Point*ps, int n) {
     //swap
-    for(int i=n/2;i<n;i++) {
+    int i=n/2;
+    for(;i<n;i++) {
         Point tmp = ps[i];
         ps[i] = ps[n-i];
         ps[n-i] = tmp;
@@ -35,7 +36,8 @@ float cross(Point o,Point a,Point b){  //叉积
 float area(Point* ps,int n){
     ps[n]=ps[0];
     float res=0;
-    for(int i=0;i<n;i++){
+    int i=0;
+    for(;i<n;i++){
         res+=ps[i].x*ps[i+1].y-ps[i].y*ps[i+1].x;
     }
     return res/2.0;
@@ -57,13 +59,14 @@ void polygon_cut(Point*p,int* n_io,Point a,Point b){
     static Point pp[maxn];
     int n = *n_io;
     int m=0;p[n]=p[0];
-    for(int i=0;i<n;i++){
+    int i;
+    for(i=0;i<n;i++){
         if(sig(cross(a,b,p[i]))>0) pp[m++]=p[i];
         if(sig(cross(a,b,p[i]))!=sig(cross(a,b,p[i+1])))
             lineCross(a,b,p[i],p[i+1],pp+m++);
     }
     n=0;
-    for(int i=0;i<m;i++)
+    for(i=0;i<m;i++)
         if(!i||!cmp(pp + i,pp + i-1))
             p[n++]=pp[i];
     while(n>1&&cmp(p+n-1,p))n--;
@@ -96,8 +99,9 @@ float intersectArea(Point*ps1,int n1,Point*ps2,int n2){
     ps1[n1]=ps1[0];
     ps2[n2]=ps2[0];
     float res=0;
-    for(int i=0;i<n1;i++){
-        for(int j=0;j<n2;j++){
+    int i, j;
+    for(i=0;i<n1;i++){
+        for(j=0;j<n2;j++){
             res+=triangleIntersectArea(ps1[i],ps1[i+1],ps2[j],ps2[j+1]);
         }
     }
@@ -109,7 +113,8 @@ float _cpu_iou_poly(float* p, float* q) {
     Point ps1[maxn],ps2[maxn];
     int n1 = 4;
     int n2 = 4;
-    for (int i = 0; i < 4; i++) {
+    int i;
+    for (i = 0; i < 4; i++) {
         ps1[i].x = p[i * 2];
         ps1[i].y = p[i * 2 + 1];
 

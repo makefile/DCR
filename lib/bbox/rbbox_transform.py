@@ -45,6 +45,17 @@ def clip_quadrangle_boxes(boxes, im_shape):
     boxes[:, 7::8] = np.maximum(np.minimum(boxes[:, 7::8], im_shape[0] - 1), 0)
     return boxes
 
+def clip_rotate_boxes(boxes, im_shape):
+    """
+    Clip boxes to image boundaries.
+    """
+    # very rough way
+    boxes[:, 0::8] = np.maximum(np.minimum(boxes[:, 0::8], im_shape[1] - 1), 0)
+    boxes[:, 1::8] = np.maximum(np.minimum(boxes[:, 1::8], im_shape[0] - 1), 0)
+    boxes[:, 2::8] = np.maximum(np.minimum(boxes[:, 2::8], im_shape[1] - 1), 0)
+    boxes[:, 3::8] = np.maximum(np.minimum(boxes[:, 3::8], im_shape[0] - 1), 0)
+    return boxes
+
 def nonlinear_transform_quadrangle(ex_rois, gt_rois):
     """
     compute bounding box regression targets from ex_rois to gt_rois

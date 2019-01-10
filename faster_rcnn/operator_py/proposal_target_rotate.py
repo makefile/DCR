@@ -58,10 +58,11 @@ class ProposalTargetQuadrangleOperator(mx.operator.CustomOp):
         zeros = np.zeros((gt_boxes.shape[0], 1), dtype=gt_boxes.dtype)
         all_rois = np.vstack((all_rois, np.hstack((zeros, gt_boxes[:, :-1]))))
         # Sanity check: single batch only
-        assert np.all(all_rois[:, 0] == 0), 'Only single item batches are supported'
+        # assert np.all(all_rois[:, 0] == 0), 'Only single item batches are supported'
 
         rois, labels, bbox_targets, bbox_weights = \
-            sample_rois_rotate(all_rois, fg_rois_per_image, rois_per_image, self._num_classes, self._cfg, gt_boxes=gt_boxes)
+            sample_rois_rotate(all_rois, fg_rois_per_image, rois_per_image, self._num_classes, self._cfg, gt_boxes=gt_boxes,
+                               device_id=in_data[0].context.device_id)
 
         if DEBUG:
             print "labels=", labels

@@ -18,11 +18,12 @@ import os
 import numpy as np
 
 from imdb import IMDB
-import cv2
+# import cv2
 # import zipfile
 from PIL import Image
 import codecs
-from ds_utils import get_best_begin_point, get_horizon_minAreaRectangle
+from ds_utils import get_best_begin_point, get_horizon_minAreaRectangle, get_rotate_rect
+from DOTAtools import dota_eval
 
 # the target of this class is to get DOTA roidb
 class DOTA(IMDB):
@@ -326,6 +327,7 @@ class DOTA_oriented(IMDB):
             num_objs = len(objs)
 
             boxes = np.zeros((num_objs, 8), dtype=np.uint16)
+            boxes_rotate_rect = np.zeros((num_objs, 5), dtype=np.uint16)
             gt_classes = np.zeros((num_objs), dtype=np.int32)
             overlaps = np.zeros((num_objs, self.num_classes), dtype=np.float32)
 
@@ -348,9 +350,12 @@ class DOTA_oriented(IMDB):
                 # ymax = max(y1, y2, y3, y4)
                 cls = class_to_index[obj[8].lower().strip()]
                 boxes[ix, :] = get_best_begin_point([x1, y1, x2, y2, x3, y3, x4, y4])
+                # convert to rotate rectangle
+                boxes_rotate_rect[ix, :] = get_rotate_rect(boxes[ix, :])
                 gt_classes[ix] = cls
                 overlaps[ix, cls] = 1.0
             roi_rec.update({'boxes': boxes,
+                            'boxes_rotate': boxes_rotate_rect,
                             'gt_classes': gt_classes,
                             'gt_overlaps': overlaps,
                             'max_classes': overlaps.argmax(axis=1),
@@ -377,6 +382,7 @@ class DOTA_oriented(IMDB):
         num_objs = len(objs)
 
         boxes = np.zeros((num_objs, 8), dtype=np.uint16)
+        boxes_rotate_rect = np.zeros((num_objs, 5), dtype=np.uint16)
         gt_classes = np.zeros((num_objs), dtype=np.int32)
         overlaps = np.zeros((num_objs, self.num_classes), dtype=np.float32)
 
@@ -395,9 +401,12 @@ class DOTA_oriented(IMDB):
             y4 = float(bbox[7]) - 1
             cls = class_to_index[obj[8].lower().strip()]
             boxes[ix, :] = get_best_begin_point([x1, y1, x2, y2, x3, y3, x4, y4])
+            # convert to rotate rectangle
+            boxes_rotate_rect[ix, :] = get_rotate_rect(boxes[ix, :])
             gt_classes[ix] = cls
             overlaps[ix, cls] = 1.0
         roi_rec.update({'boxes': boxes,
+                        'boxes_rotate': boxes_rotate_rect,
                         'gt_classes': gt_classes,
                         'gt_overlaps': overlaps,
                         'max_classes': overlaps.argmax(axis=1),
@@ -436,17 +445,21 @@ class DOTA_oriented(IMDB):
         # write_results_by_class will write to #cls num files
         # self.write_DOTA_results(detections, threshold=0.0)
         self.write_results_by_class(detections, threshold=0.0)
-        os.system("../DOTA_devkit/eval.py {} {} {}".format(self.result_path, 1, draw)) # task 1
-        os.system("../DOTA_devkit/eval.py {} {} {}".format(self.result_path, 2, draw)) # task 2
-        info = ''
-        return info
+        # print 'use native DOTA_devkit'
+        # tmp_file = '/tmp/dota_eval.result' # can also in /dev/shm
+        # os.system("../DOTA_devkit/eval.py {} {} {} | tee    {}".format(self.result_path, 1, draw, tmp_file)) # task 1
+        # os.system("../DOTA_devkit/eval.py {} {} {} | tee -a {}".format(self.result_path, 2, draw, tmp_file)) # task 2
+        # info = open(tmp_file).read()
+        # return info
+        info1 = dota_eval.start_eval(self.result_path, 1, draw)
+        info2 = dota_eval.start_eval(self.result_path, 2, draw)
+        return info1 + '\n' + info2
 
-    def evaluate_detections_with_bbox(self, all_boxes, all_boxes_h, threshold = 0, draw=False):
+    def evaluate_detections_with_bbox(self, all_boxes, all_boxes_h, threshold=0, draw=False):
         '''
         write result as format accepted by DOTA_devkit and ODAI evaluation server
         both quadrangle box and horizontal bbox
         '''
-
         path1 = os.path.join(self.result_path, 'test_results_by_class_task1')
         path2 = os.path.join(self.result_path, 'test_results_by_class_task2')
         if not os.path.exists(path1): os.mkdir(path1)
@@ -486,10 +499,14 @@ class DOTA_oriented(IMDB):
             f1.close()
             f2.close()
 
-        os.system("../DOTA_devkit/eval.py {} {} {}".format(self.result_path, 1, draw))  # task 1
-        os.system("../DOTA_devkit/eval.py {} {} {}".format(self.result_path, 2, draw))  # task 2
-        info = ''
-        return info
+        # tmp_file = '/tmp/dota_eval.result' # can also in /dev/shm
+        # os.system("../DOTA_devkit/eval.py {} {} {} | tee    {}".format(self.result_path, 1, draw, tmp_file))  # task 1
+        # os.system("../DOTA_devkit/eval.py {} {} {} | tee -a {}".format(self.result_path, 2, draw, tmp_file))  # task 2
+        # info = open(tmp_file).read()
+        # return info
+        info1 = dota_eval.start_eval(self.result_path, 1, draw)
+        info2 = dota_eval.start_eval(self.result_path, 2, draw)
+        return info1 + '\n' + info2
 
     '''
     def draw_gt_and_detections(self, detections, thresh=0.2):

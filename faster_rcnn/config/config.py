@@ -24,6 +24,10 @@ config.gpus = ''
 config.CLASS_AGNOSTIC = True
 config.RESIZE_TO_FIX_SIZE = True
 config.SCALES = [(600, 1000)]  # first is scale (the shorter side); second is max size
+# object box representation way:
+config.BOX_TYPE_ROTATE_RECTANGLE = 0
+config.BOX_TYPE_QUADRANGLE = 1
+config.box_type = config.BOX_TYPE_QUADRANGLE
 
 # default training
 config.default = edict()
@@ -37,6 +41,8 @@ config.network.pretrained = ''
 config.network.pretrained_epoch = 0
 config.network.PIXEL_MEANS = np.array([0, 0, 0])
 config.network.IMAGE_STRIDE = 0
+# R2CNN plus: expected_feat_stride
+config.network.expected_feat_stride = 8
 config.network.RPN_FEAT_STRIDE = 16
 config.network.RCNN_FEAT_STRIDE = 16
 config.network.FIXED_PARAMS = ['gamma', 'beta']
@@ -143,8 +149,7 @@ config.TRAIN.BBOX_MEANS = (0.0, 0.0, 0.0, 0.0)
 config.TRAIN.BBOX_STDS = (0.1, 0.1, 0.2, 0.2)
 
 # R2CNN
-config.TRAIN.expected_feat_stride = 8
-config.TRAIN.RPN_LOCATION_LOSS_WEIGHT = 0.5
+config.TRAIN.RPN_LOCATION_LOSS_WEIGHT = 1
 config.TRAIN.RPN_CLASSIFICATION_LOSS_WEIGHT = 2
 config.TRAIN.BINARY_MASK_LOSS_WEIGHT = 1
 config.TRAIN.FAST_RCNN_LOCATION_LOSS_WEIGHT = 4

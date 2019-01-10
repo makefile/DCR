@@ -131,16 +131,16 @@ __device__ inline bool inter2line(float const * pts1, float const *pts2, int i, 
 }
 
 // DO NOT USE THIS FUNCTION
-__device__ inline bool in_rect_only_suitable_for_integer(float pt_x, float pt_y, float const * pts) {
+__device__ inline bool in_rect_only_suitable_for_convex_quadrangle1(float pt_x, float pt_y, float const * pts) {
 
-  double ab[2];
-  double ad[2];
-  double ap[2];
+  float ab[2];
+  float ad[2];
+  float ap[2];
 
-  double abab;
-  double abap;
-  double adad;
-  double adap;
+  float abab;
+  float abap;
+  float adad;
+  float adap;
 
   ab[0] = pts[2] - pts[0];
   ab[1] = pts[3] - pts[1];
@@ -156,11 +156,12 @@ __device__ inline bool in_rect_only_suitable_for_integer(float pt_x, float pt_y,
   adad = ad[0] * ad[0] + ad[1] * ad[1];
   adap = ad[0] * ap[0] + ad[1] * ap[1];
   // BUG!! fyk: there has bug for coordinate such as judge (1,1) in [0.5, 0.5, 1.5, 0.5, 1.5, 1.5, 0.5, 1.5]
-  // maybe the value -1 is bad
-  bool result = (abab - abap >=  -1) and (abap >= -1) and (adad - adap >= -1) and (adap >= -1);
-  return result;
+  // the value -1 is bad
+  // bool result = (abab - abap >=  -1) and (abap >= -1) and (adad - adap >= -1) and (adap >= -1);
+  // return result;
+  return abab >= abap and abap >= 0 and adad >= adap and adap >= 0;
 }
-__device__ inline bool in_rect_only_suitable_for_convex_quadrangle(float pt_x, float pt_y, float const * pts) {
+__device__ inline bool in_rect_only_suitable_for_convex_quadrangle2(float pt_x, float pt_y, float const * pts) {
     // https://blog.csdn.net/San_Junipero/article/details/79172260
     // https://blog.csdn.net/laukaka/article/details/45168439
     // float a = (B.x - A.x)*(y - A.y) - (B.y - A.y)*(x - A.x);
@@ -379,11 +380,18 @@ __device__ inline void convert_region(float * pts , float const * const region) 
 */
 
 __device__ inline float devRotateIoU(float const * const region1, float const * const region2) {
+  // when 2 box is same or very similar, IoU calculation might be incorrect, so we first check it
+  if ( (fabs(region1[0] - region2[0]) < 1e-1) && (fabs(region1[1] - region2[1]) < 1e-1)
+    && (fabs(region1[2] - region2[2]) < 1e-1) && (fabs(region1[3] - region2[3]) < 1e-1)
+    && (fabs(region1[4] - region2[4]) < 1e-1) && (fabs(region1[5] - region2[5]) < 1e-1)
+    && (fabs(region1[6] - region2[6]) < 1e-1) && (fabs(region1[7] - region2[7]) < 1e-1)) {
+      return 1.0;
+  }
   // enlarge to decrease the edge cases
-  const float pts1[] = {region1[0] * 100, region1[1] * 100, region1[2] * 100, region1[3] * 100,
-                         region1[4] * 100, region1[5] * 100, region1[6] * 100, region1[7] * 100};
-  const float pts2[] = {region2[0] * 100, region2[1] * 100, region2[2] * 100, region2[3] * 100,
-                         region2[4] * 100, region2[5] * 100, region2[6] * 100, region2[7] * 100};
+  const float pts1[] = { region1[0] * 10, region1[1] * 10, region1[2] * 10, region1[3] * 10,
+                         region1[4] * 10, region1[5] * 10, region1[6] * 10, region1[7] * 10};
+  const float pts2[] = { region2[0] * 10, region2[1] * 10, region2[2] * 10, region2[3] * 10,
+                         region2[4] * 10, region2[5] * 10, region2[6] * 10, region2[7] * 10};
 
   float area1 = area(pts1, 4);
   float area2 = area(pts2, 4);

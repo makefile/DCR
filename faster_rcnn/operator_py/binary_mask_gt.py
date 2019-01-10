@@ -19,6 +19,7 @@ class BinaryMaskGTOperator(mx.operator.CustomOp):
 
         # create array shape like bin_mask_pred, scale the gt_boxes and draw the boxes in bin_mask_gt
         bin_mask_gt = np.zeros_like(bin_mask_pred[0, 0, :, :], np.uint8)
+        assert bin_mask_gt.ndim == 2
         self.fill_poly(bin_mask_gt, gt_boxes, self._spatial_scale)
 
         self.assign(out_data[0], req[0], bin_mask_gt.reshape(bin_mask_pred.shape))
@@ -31,10 +32,10 @@ class BinaryMaskGTOperator(mx.operator.CustomOp):
 
     def fill_poly(self, img, gt_boxes, spatial_scale):
         areas = []
-        # [batch_idx, x1, y1, x2, y2, x3, y3, x4, y4] point in clockwise
+        # [x1, y1, x2, y2, x3, y3, x4, y4, class] point in clockwise
         for b in gt_boxes:
-            a = np.array([ [round(b[1] * spatial_scale), round(b[2] * spatial_scale)], [round(b[3] * spatial_scale), round(b[4] * spatial_scale)],
-                           [round(b[5] * spatial_scale), round(b[6] * spatial_scale)], [round(b[7] * spatial_scale), round(b[8] * spatial_scale)] ],
+            a = np.array([ [round(b[0] * spatial_scale), round(b[1] * spatial_scale)], [round(b[2] * spatial_scale), round(b[3] * spatial_scale)],
+                           [round(b[4] * spatial_scale), round(b[5] * spatial_scale)], [round(b[6] * spatial_scale), round(b[7] * spatial_scale)] ],
                          np.int32) # numpy type for fillPoly must be integer
             areas.append(a)
 

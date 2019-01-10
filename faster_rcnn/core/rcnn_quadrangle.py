@@ -138,7 +138,8 @@ def sample_rois_quadrangle(rois, fg_rois_per_image, rois_per_image, num_classes,
 
 
 def sample_rois_rotate(rois, fg_rois_per_image, rois_per_image, num_classes, cfg,
-                labels=None, overlaps=None, bbox_targets=None, gt_boxes=None):
+                labels=None, overlaps=None, bbox_targets=None, gt_boxes=None,
+                       device_id=None):
     """
     generate random sample of ROIs comprising foreground and background examples
     sample the quadrangle by polygon IOU
@@ -150,13 +151,15 @@ def sample_rois_rotate(rois, fg_rois_per_image, rois_per_image, num_classes, cfg
     :param overlaps: maybe precomputed (max_overlaps)
     :param bbox_targets: maybe precomputed
     :param gt_boxes: optional for e2e [n, 9] (x1, y1, x2, y2, x3, y3, x4, y4, cls)
+    :param device_id; device for gpu_nms calc
     :return: (labels, rois, bbox_targets, bbox_weights)
     """
 
     if labels is None:
         # logger.debug("pse start polygon_overlaps")
         # overlaps = cpu_polygon_overlaps(rois[:, 1:].astype(np.float32), gt_boxes[:, :8].astype(np.float32))
-        overlaps = gpu_polygon_overlaps_r(rois[:, 1:].astype(np.float32), gt_boxes[:, :8].astype(np.float32), current_context().device_id)
+        if device_id is None: device_id = current_context().device_id
+        overlaps = gpu_polygon_overlaps_r(rois[:, 1:].astype(np.float32), gt_boxes[:, :8].astype(np.float32), device_id)
         # logger.debug("pse end polygon_overlaps")
         gt_assignment = overlaps.argmax(axis=1)
         overlaps = overlaps.max(axis=1)

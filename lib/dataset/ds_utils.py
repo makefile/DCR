@@ -1,5 +1,5 @@
 import numpy as np
-from math import pi, atan2
+from math import pi, atan2, sqrt
 
 
 def unique_boxes(boxes, scale=1.0):
@@ -225,6 +225,13 @@ def get_best_begin_point(coordinate):
     sorted_idx = distances.argsort()
     return combinate[sorted_idx[0]].tolist()
 
+def get_rotate_rect(coordinate):
+    '''simple way to get height of rotate rectangle'''
+    x1, y1, x2, y2, x3, y3, x4, y4 = coordinate
+    dist1to4 = sqrt((x1-x4)**2 + (y1-y4)**2)
+    dist2to3 = sqrt((x2-x3)**2 + (y2-y3)**2)
+    return x1, y1, x2, y2, (dist1to4 + dist2to3) / 2.
+
 def filter_convex_boxes(boxes):
     assert boxes.shape[1] == 8, "Points list shape not valid: " + str(boxes.shape[1])
     areas = area(boxes, num_of_inter=4)
@@ -260,6 +267,8 @@ def filter_clockwise_boxes(boxes):
     boxes_is_simple_convex = np.array([is_convex_polygon([(b[0],b[1]),(b[2],b[3]),(b[4],b[5]),(b[6],b[7])])
                       for b in boxes])
     keep = np.where((summatory <= 0) & (areas >= 16) & (boxes_is_simple_convex == True))[0]
+    if len(keep) < len(boxes):
+        print 'filter_clockwise_boxes bad boxes: {} / {}'.format(len(boxes) - len(keep), len(boxes))
 
     return keep
 
