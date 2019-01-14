@@ -40,7 +40,7 @@ import mxnet as mx
 from symbols import *
 from core import callback, metric
 from core.loader_quadrangle import QuadrangleAnchorLoader
-from core.threaded_loader_quadrangle import ThreadedQuadrangleAnchorLoader
+from core.threaded_loader_quadrangle import ThreadedQuadrangleAnchorLoader, MPQuadrangleAnchorLoader
 from core.module import MutableModule
 from utils.create_logger import create_logger
 from utils.load_data import merge_roidb, filter_roidb
@@ -53,6 +53,12 @@ from utils.lr_scheduler import WarmupMultiFactorScheduler
 def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, lr_step):
     logger, final_output_path = create_logger(config.output_path, args.cfg, config.dataset.image_set)
     prefix = os.path.join(final_output_path, prefix)
+
+    # tensorboard writer, must be placed after create_logger, or logger will init failed
+    from mxboard import SummaryWriter
+    mxboard_logdir = os.path.join(config.output_path, 'logs')
+    sw = SummaryWriter(logdir=mxboard_logdir, filename_suffix='.' + config.symbol, verbose=False)
+    # sw = None
 
     # load symbol
     shutil.copy2(os.path.join(curr_path, 'symbols', config.symbol + '.py'), final_output_path)
@@ -77,9 +83,18 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
     roidb = merge_roidb(roidbs)
     roidb = filter_roidb(roidb, config)
 
+    # get system memory GB
+    mem_line = map(int, os.popen('free -g').readlines()[1].split()[1:])
+    total_mem, available_mem = mem_line[0], mem_line[-1]
     # load training data
-    # train_data = QuadrangleAnchorLoader(feat_sym, roidb, config, batch_size=input_batch_size, shuffle=config.TRAIN.SHUFFLE, ctx=ctx,
-    train_data = ThreadedQuadrangleAnchorLoader(feat_sym, roidb, config, batch_size=input_batch_size, shuffle=config.TRAIN.SHUFFLE, ctx=ctx,
+    if available_mem < 32:
+        print 'use single thread prefetching in small machine.'
+        loader = QuadrangleAnchorLoader
+    else:
+        print 'use multi thread prefetching.'
+        # loader = ThreadedQuadrangleAnchorLoader
+        loader = MPQuadrangleAnchorLoader
+    train_data = loader(feat_sym, roidb, config, batch_size=input_batch_size, shuffle=config.TRAIN.SHUFFLE, ctx=ctx,
                               feat_stride=config.network.RPN_FEAT_STRIDE, anchor_scales=config.network.ANCHOR_SCALES,
                               anchor_angles=config.network.ANCHOR_ANGLES, inclined_anchor=True,
                               anchor_ratios=config.network.ANCHOR_RATIOS, aspect_grouping=config.TRAIN.ASPECT_GROUPING)
@@ -131,7 +146,8 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
     for child_metric in [rpn_eval_metric, rpn_cls_metric, rpn_bbox_metric, eval_metric, cls_metric, bbox_metric]:
         eval_metrics.add(child_metric)
     # callback
-    batch_end_callback = callback.Speedometer(train_data.batch_size, frequent=args.frequent, num_epoch=config.TRAIN.end_epoch - config.TRAIN.begin_epoch)
+    batch_end_callback = callback.Speedometer(train_data.batch_size, frequent=args.frequent, num_epoch=config.TRAIN.end_epoch - config.TRAIN.begin_epoch,
+                                              logger=logger, mxboard_writer=sw)
     means = np.tile(np.array(config.TRAIN.BBOX_MEANS), 2 if config.CLASS_AGNOSTIC else config.dataset.NUM_CLASSES)
     stds = np.tile(np.array(config.TRAIN.BBOX_STDS), 2 if config.CLASS_AGNOSTIC else config.dataset.NUM_CLASSES)
     epoch_end_callback = [mx.callback.module_checkpoint(mod, prefix, period=1, save_optimizer_states=True), callback.do_checkpoint(prefix, means, stds)]
@@ -161,6 +177,11 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
             optimizer='sgd', optimizer_params=optimizer_params,
             metric_update_freq=max(config.default.metric_update_freq, config.default.frequent),
             arg_params=arg_params, aux_params=aux_params, begin_epoch=begin_epoch, num_epoch=end_epoch)
+
+    # close mxboard writer
+    if sw:
+        sw.add_graph(sym)
+        sw.close()
 
 
 def main():

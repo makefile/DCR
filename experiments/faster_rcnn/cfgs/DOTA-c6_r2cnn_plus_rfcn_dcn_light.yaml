@@ -1,7 +1,7 @@
 ---
 MXNET_VERSION: "mxnet-pip"
 output_path: "./output/rcnn/DOTA-c6_r2cnn_rfcn_dcn_light"
-symbol: resnet_v1_50_r2cnn_VInceptionFusionV_rfcn_dcn_light
+symbol: resnet_v1_50_r2cnn_plus_rfcn_dcn_light
 #gpus: '0,1,2,3'
 gpus: 'all'
 CLASS_AGNOSTIC: true
@@ -77,7 +77,7 @@ TRAIN:
   begin_epoch: 0
 #  end_epoch: 60
   end_epoch: 30
-  model_prefix: 'DOTA-c6_r2cnn_VInceptionFusionV_rfcn_dcn_light'
+  model_prefix: 'DOTA-c6_r2cnn_plus_rfcn_dcn_light'
   # whether resume training
   RESUME: false
 #  RESUME: true

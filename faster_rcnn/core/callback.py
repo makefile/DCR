@@ -18,7 +18,8 @@ import sys
 
 
 class Speedometer(object):
-    def __init__(self, batch_size, frequent=50, num_epoch=-1):
+    def __init__(self, batch_size, frequent=50, num_epoch=-1,
+                 logger=None, mxboard_writer=None):
         self.batch_size = batch_size
         self.frequent = frequent
         self.init = False
@@ -29,6 +30,9 @@ class Speedometer(object):
         self.start_run_tic = time.time()
         self.total_run_batches = 0
         self.total_nbatch = 0
+        self.mxboard_writer = mxboard_writer # SummeryWriter
+        self.logger = logger
+        if not logger: self.logger = logging
 
     def __call__(self, param):
         """Callback to Show speed."""
@@ -58,15 +62,17 @@ class Speedometer(object):
 
                     for n, v in zip(name, value):
                         s += "%s=%f,\t" % (n, v)
+                        if self.mxboard_writer:
+                            self.mxboard_writer.add_scalar(tag=n, value=v, global_step=self.total_run_batches)
                 else:
                     s = "Iter[%d] Batch [%d]\tSpeed: %.2f samples/sec" % (param.epoch, count, speed)
 
-                logging.info(s)
+                self.logger.info(s)
                 print(s)
                 # fyk: flush screen output
                 # s = '\r' + s
                 # sys.stdout.write(s)
-                # sys.stdout.flush()
+                sys.stdout.flush()
                 self.tic = time.time()
         else:
             self.init = True

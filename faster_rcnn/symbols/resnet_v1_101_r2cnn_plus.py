@@ -865,7 +865,7 @@ class resnet_v1_101_r2cnn_plus(Symbol):
         c3_upsample = c3
         c3_incept, if3_channels = self.InceptionModule(c3_upsample, name='incept1') # 1024
         # c4 upsample expected_feat_stride/16
-        c4_upsample = mx.symbol.UpSampling(c4, scale=16 / expected_feat_stride, sample_type='nearest', name='c3_upsample')
+        c4_upsample = mx.symbol.UpSampling(c4, scale=16 / expected_feat_stride, sample_type='nearest', name='c4_upsample')
         # clip size to c3_incept, we can also do image align to 2^n
         P4_clip = mx.symbol.Crop(*[c4_upsample, c3_incept], name="P4_clip")
 

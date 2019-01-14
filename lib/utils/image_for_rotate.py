@@ -10,6 +10,7 @@ import random
 from math import ceil
 from image import resize, transform
 from bbox.rbbox_transform import clip_quadrangle_boxes, clip_rotate_boxes
+from image_augmenter import histEqualColor, apply_distort
 
 def get_image_quadrangle_bboxes(roidb, config, isTrain=True):
     """
@@ -29,8 +30,15 @@ def get_image_quadrangle_bboxes(roidb, config, isTrain=True):
         assert os.path.exists(roi_rec['image']), '%s does not exist'.format(roi_rec['image'])
         im = cv2.imread(roi_rec['image'], cv2.IMREAD_COLOR|cv2.IMREAD_IGNORE_ORIENTATION)
 
-        if isTrain and roidb[i]['flipped']:
-            im = im[:, ::-1, :]
+        if isTrain:
+            if roidb[i]['flipped']: im = im[:, ::-1, :]
+            # do hue/saturation distort,
+            # do not do brightness and contrast distort since we always do Histogram Equalization
+            if random.random() < 0.5:
+                im = apply_distort(im)
+        # Histogram Equalization
+        im = histEqualColor(im)
+
         new_rec = roi_rec.copy()
         scale_ind = random.randrange(len(config.SCALES))
         target_size = config.SCALES[scale_ind][0]

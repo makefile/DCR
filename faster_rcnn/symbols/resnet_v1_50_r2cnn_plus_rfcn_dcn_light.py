@@ -13,7 +13,7 @@ from operator_py.proposal_target import *
 from operator_py.box_annotator_ohem import *
 
 
-class resnet_v1_50_r2cnn_VInceptionFusionV_rfcn_dcn_light(Symbol):
+class resnet_v1_50_r2cnn_plus_rfcn_dcn_light(Symbol):
 
     def __init__(self):
         """
@@ -422,6 +422,27 @@ class resnet_v1_50_r2cnn_VInceptionFusionV_rfcn_dcn_light(Symbol):
         channels = 1024
         return concat, channels
 
+    def squeeze_excitation_block(self, name, data, num_filter, ratio=1./16):
+        '''
+        SENet block
+        :param name: used for param name
+        :param data: feature
+        :param num_filter: channel of input data
+        :param ratio: channel squeeze ratio
+        :return: sigmoid for channel importance
+        '''
+        squeeze = mx.sym.Pooling(data=data, global_pool=True, kernel=(7, 7), pool_type='avg', name=name + '_squeeze')
+        squeeze = mx.symbol.Flatten(data=squeeze, name=name + '_flatten')
+        excitation = mx.symbol.FullyConnected(data=squeeze, num_hidden=int(num_filter * ratio),
+                                              name=name + '_excitation1')
+        excitation = mx.sym.Activation(data=excitation, act_type='relu', name=name + '_excitation1_relu')
+        excitation = mx.symbol.FullyConnected(data=excitation, num_hidden=num_filter, name=name + '_excitation2')
+        excitation = mx.sym.Activation(data=excitation, act_type='sigmoid', name=name + '_excitation2_sigmoid')
+
+        return excitation
+        # scale = mx.symbol.broadcast_mul(data, mx.symbol.reshape(data=excitation, shape=(-1, num_filter, 1, 1)))
+        # return scale
+
     def get_symbol(self, cfg, is_train=True):
 
         # config alias for convenient
@@ -456,8 +477,24 @@ class resnet_v1_50_r2cnn_VInceptionFusionV_rfcn_dcn_light(Symbol):
 
         # feature fusion of inception, channel 1024
         f3_plus = mx.sym.ElementWiseSum(*[c3_incept, P4_clip], name='IF_c3+c4')
-        # now only use IF
-        mda3 = f3_plus
+
+        #  the multi-dimensional attention network (MDA-Net), feature shape do not change
+        #------ pixel attention: Inception
+        f3_incept, _ = self.InceptionModule(f3_plus, name='incept2')
+        # saliency map, shape [N, 2, h, w]
+        sal_map = mx.symbol.Convolution(name='conv_f3_sal', data=f3_incept, num_filter=2,
+                                pad=(0, 0), kernel=(1, 1), stride=(1, 1))
+        #  softmax(FG vs BG) only keep FG channel
+        sal_prob = mx.sym.softmax(data=sal_map, axis=1, name='sal_prob_softmax')
+        # the first set are background probabilities, shape [N, 1, h, w]
+        bin_mask_pred = mx.sym.slice_axis(sal_prob, axis=1, begin=1, end=2)
+
+        #------ channel attention: SENet
+        channel_sigmoid = self.squeeze_excitation_block(name='se', data=f3_plus, num_filter=if3_channels, ratio=1./16)
+        # apply channel attention with pixel attention
+        scale = mx.symbol.broadcast_mul(f3_plus, mx.symbol.reshape(data=channel_sigmoid, shape=(-1, if3_channels, 1, 1)))
+        mda3 = mx.symbol.broadcast_mul(scale, bin_mask_pred)
+
         # res5
         relu1 = self.get_resnet_v1_conv5(mda3)
         rpn_cls_score, rpn_bbox_pred = self.get_rpn(mda3, num_anchors)
@@ -466,6 +503,14 @@ class resnet_v1_50_r2cnn_VInceptionFusionV_rfcn_dcn_light(Symbol):
 
         if is_train:
             gt_boxes_reshape = mx.sym.Reshape(data=gt_boxes, shape=(-1, 9), name='gt_boxes_reshape')
+            bin_mask_gt = mx.sym.Custom(
+                bin_mask_pred=bin_mask_pred, gt_boxes=gt_boxes_reshape, name='bin_mask_gt',
+                op_type='BinaryMaskGt', spatial_scale=spatial_scale)
+            ce_loss = -(mx.sym.log(bin_mask_pred + self.eps) * bin_mask_gt +
+                        mx.sym.log(1. - bin_mask_pred + self.eps) * (1. - bin_mask_gt))
+            binary_mask_loss = mx.sym.MakeLoss(name='binary_mask_loss', data=ce_loss,
+                                               normalization='valid',  # 'null', 'batch',
+                                               grad_scale=cfg.TRAIN.BINARY_MASK_LOSS_WEIGHT)
 
             # prepare rpn data
             rpn_cls_score_reshape = mx.sym.Reshape(
@@ -651,7 +696,9 @@ class resnet_v1_50_r2cnn_VInceptionFusionV_rfcn_dcn_light(Symbol):
 
             # group = mx.sym.Group([rpn_cls_prob, rpn_bbox_loss, cls_prob, bbox_loss, mx.sym.BlockGrad(rcnn_label)])
             group = mx.sym.Group([rpn_cls_prob, rpn_bbox_loss, cls_prob, bbox_loss, mx.sym.BlockGrad(rcnn_label),
-                                  cls_prob_h, bbox_loss_h, mx.sym.BlockGrad(rcnn_label_h)])
+                                  # cls_prob_h, bbox_loss_h, mx.sym.BlockGrad(rcnn_label_h)])
+                                  binary_mask_loss, mx.sym.BlockGrad(bin_mask_gt), cls_prob_h, bbox_loss_h, mx.sym.BlockGrad(rcnn_label_h)])
+
         else:
             cls_prob = mx.sym.SoftmaxActivation(name='cls_prob', data=cls_score)
             cls_prob = mx.sym.Reshape(data=cls_prob, shape=(cfg.TEST.BATCH_IMAGES, -1, num_classes),
@@ -732,7 +779,25 @@ class resnet_v1_50_r2cnn_VInceptionFusionV_rfcn_dcn_light(Symbol):
             arg_params[prefix + '_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict[prefix + '_weight'])
             arg_params[prefix + '_bias'] = mx.nd.zeros(shape=self.arg_shape_dict[prefix + '_bias'])
 
+    def init_weight_attention_net(self, cfg, arg_params, aux_params):
+        # Inception Module
+        names = ['_mixed_conv_1_1x1', '_mixed_conv_1_1x3', '_mixed_conv_1_3x1',
+                 '_mixed_conv_2_1x1', '_mixed_conv_2_5x1', '_mixed_conv_2_1x5', '_mixed_conv_2_7x1',
+                 '_mixed_conv_2_1x7', '_pool_conv_1x1', '_cproj']
+        for nm in names:
+            prefix = 'incept2' + nm
+            arg_params[prefix + '_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict[prefix + '_weight'])
+            arg_params[prefix + '_bias'] = mx.nd.zeros(shape=self.arg_shape_dict[prefix + '_bias'])
+
+        arg_params['conv_f3_sal_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['conv_f3_sal_weight'])
+        arg_params['conv_f3_sal_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['conv_f3_sal_bias'])
+        arg_params['se_excitation1_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['se_excitation1_weight'])
+        arg_params['se_excitation1_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['se_excitation1_bias'])
+        arg_params['se_excitation2_weight'] = mx.random.normal(0, 0.01, shape=self.arg_shape_dict['se_excitation2_weight'])
+        arg_params['se_excitation2_bias'] = mx.nd.zeros(shape=self.arg_shape_dict['se_excitation2_bias'])
+
     def init_weight(self, cfg, arg_params, aux_params):
         self.init_weight_rpn(cfg, arg_params, aux_params)
         self.init_weight_rfcn(cfg, arg_params, aux_params)
         self.init_weight_rpn_feature_fusion(cfg, arg_params, aux_params)
+        self.init_weight_attention_net(cfg, arg_params, aux_params)

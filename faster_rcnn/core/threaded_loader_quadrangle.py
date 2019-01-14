@@ -18,10 +18,10 @@ import threading
 import Queue
 import atexit
 
-class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
+class MPQuadrangleAnchorLoader(mx.io.DataIter):
     def __init__(self, feat_sym, roidb, cfg, batch_size=1, shuffle=False, ctx=None, work_load_list=None,
                  feat_stride=16, anchor_scales=(8, 16, 32), anchor_ratios=(0.5, 1, 2), allowed_border=0,
-                 aspect_grouping=False, anchor_angles=(-60, -30, 0, 30, 60, 90), inclined_anchor=False,
+                 aspect_grouping=False, anchor_angles=(-60, -30, 0), inclined_anchor=False,
                  n_thread=None):
         """
         This Iter will provide roi data to Fast R-CNN network
@@ -35,7 +35,7 @@ class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
         :param n_thread: num of threads, if None, then auto define n_thread as logical CPU cores num
         :return: AnchorLoader
         """
-        super(ThreadedQuadrangleAnchorLoader, self).__init__()
+        super(MPQuadrangleAnchorLoader, self).__init__()
 
         # save parameters as properties
         self.feat_sym = feat_sym
@@ -72,9 +72,11 @@ class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
         self.data = None
         self.label = None
 
-        if n_thread is None: n_thread = min(multiprocessing.cpu_count(), 8)
+        # if n_thread is None: n_thread = multiprocessing.cpu_count()
+        if n_thread is None: n_thread = min(multiprocessing.cpu_count(), 7)
         self.n_thread = n_thread
-        self.result_q = multiprocessing.Queue(maxsize=self.n_thread * 8)
+        # set small n_thread and queue size to avoid memory overflow error on small machine
+        self.result_q = multiprocessing.Queue(maxsize=self.n_thread * 4)
         self.request_q = multiprocessing.Queue()
 
         self.worker_proc = None
@@ -82,6 +84,7 @@ class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
 
         atexit.register(self.shutdown)
         self.reset()
+        self._thread_start()
         # get first batch to fill in provide_data and provide_label
         self.data, self.label = self.get_batch_individual(0)
         # if get_batch_individual calls CUDA before start subprocess,
@@ -101,10 +104,10 @@ class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
                                                           self.result_q])
                             for pid in range(self.n_thread)]
 
-        # [item.start() for item in self.worker_proc]
-        for worker in self.worker_proc:
-            worker.daemon = True
-            worker.start()
+        [worker.start() for worker in self.worker_proc]
+        # for worker in self.worker_proc:
+        #     worker.daemon = True
+        #     worker.start()
         '''
         fyk: we do not need set daemon flag, since we handle it by our self
         The process's daemon flag, a Boolean value. This must be set before start() is called.
@@ -118,15 +121,17 @@ class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
 
     def _worker(self, worker_id, data_queue, result_queue):
         # count = 0
-        for item in iter(data_queue.get, self.stop_word): # call get until met stop_word
+        # there are some cases that when restart processes, cause CUDA initializatin error,
+        # so we avoid restart processes
+        # for item in iter(data_queue.get, self.stop_word): # call get until met stop_word
+        for item in iter(data_queue.get, None): # call get forever block=True
             # print 'worker-{} get data idx-{}'.format(worker_id, item)
             data, label = self.get_batch_individual(item)
-
             # default param: block=True, allow block when queue is full; timeout=None, never timeout
             result_queue.put((data, label))
             # count += 1
 
-    def shutdown(self):
+    def clear_queue(self):
         # clean queue
         while True:
             try:
@@ -138,16 +143,17 @@ class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
                 self.request_q.get(block=False)
             except Queue.Empty:
                 break
+
+    def shutdown(self):
+        # do not need clear the queue
+        # and do not call Queue.close(), which will throw an Closed exception
         # stop worker
         if self.worker_proc:
             for i, worker in enumerate(self.worker_proc):
                 # worker.join(timeout=1)
                 if worker.is_alive():
                     worker.terminate()
-                    # logging.error('worker {} is join fail'.format(i))
-
-    def __del__(self):
-        self.shutdown()
+                    worker.join()
 
     @property
     def provide_data(self):
@@ -183,14 +189,15 @@ class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
             np.random.shuffle(self.index)
 
     def _reset_process(self):
-        self.shutdown()
+        # self.shutdown()
+        self.clear_queue()
         items = range(0, len(self.index), self.batch_size)
         if len(self.index) % self.batch_size != 0:
             # note that the num of items must be equal to next() calls num
             items = items[:-1] # discard the last part of data
         [self.request_q.put(i) for i in items]
-        [self.request_q.put(self.stop_word) for pid in range(self.n_thread)]
-        self._thread_start()
+        # [self.request_q.put(self.stop_word) for pid in range(self.n_thread)]
+        # self._thread_start()
 
     def reset(self):
         self.cur = 0
@@ -205,6 +212,8 @@ class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
 
     def next(self):
         if self.iter_next():
+            # if self.cur > 10 and self.result_q.empty():
+            #     print 'anchor loader not fast enough!'
             self.data, self.label = self.result_q.get()
             self.cur += self.batch_size
             return mx.io.DataBatch(data=self.data, label=self.label,
@@ -419,11 +428,11 @@ class ThreadedQuadrangleTestLoader(mx.io.DataIter):
         self.im_info = im_info
 
 
-class _ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
+class ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
     def __init__(self, feat_sym, roidb, cfg, batch_size=1, shuffle=False, ctx=None, work_load_list=None,
                  feat_stride=16, anchor_scales=(8, 16, 32), anchor_ratios=(0.5, 1, 2), allowed_border=0,
                  aspect_grouping=False, anchor_angles=(-60, -30, 0, 30, 60, 90), inclined_anchor=False,
-                 n_thread=7):
+                 n_thread=4):
         """
         This Iter will provide roi data to Fast R-CNN network
         :param feat_sym: to infer shape of assign_output
@@ -436,7 +445,7 @@ class _ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
         :param n_thread: num of threads
         :return: AnchorLoader
         """
-        super(_ThreadedQuadrangleAnchorLoader, self).__init__()
+        super(ThreadedQuadrangleAnchorLoader, self).__init__()
 
         # save parameters as properties
         self.feat_sym = feat_sym
@@ -481,9 +490,14 @@ class _ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
         self.worker_proc = None
         self.stop_word = '==STOP--'
 
+        # whether cache the data in memory for latter fast access
+        # self.cache = False
+        # self.cache_data = {}
+        # self.first_epoch = True
+
         self.reset()
         # get first batch to fill in provide_data and provide_label
-        self.data, self.label = self.get_batch_individual(self.cur)
+        self.data, self.label = self.get_batch_individual(0)
 
     def _thread_start(self):
         '''
@@ -536,9 +550,6 @@ class _ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
                 # if worker.is_alive():
                     # logging.error('worker {} is join fail'.format(i))
                     # worker.terminate()
-
-    def __del__(self):
-        self.shutdown()
 
     @property
     def provide_data(self):
@@ -596,6 +607,9 @@ class _ThreadedQuadrangleAnchorLoader(mx.io.DataIter):
 
     def next(self):
         if self.iter_next():
+            # if self.cur > 10 and self.result_q.empty():
+            #     print 'anchor loader not fast enough!'
+            # uncomment the following line for testing fastest speed
             self.data, self.label = self.result_q.get()
             self.cur += self.batch_size
             return mx.io.DataBatch(data=self.data, label=self.label,

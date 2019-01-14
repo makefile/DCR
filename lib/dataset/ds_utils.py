@@ -267,8 +267,8 @@ def filter_clockwise_boxes(boxes):
     boxes_is_simple_convex = np.array([is_convex_polygon([(b[0],b[1]),(b[2],b[3]),(b[4],b[5]),(b[6],b[7])])
                       for b in boxes])
     keep = np.where((summatory <= 0) & (areas >= 16) & (boxes_is_simple_convex == True))[0]
-    if len(keep) < len(boxes):
-        print 'filter_clockwise_boxes bad boxes: {} / {}'.format(len(boxes) - len(keep), len(boxes))
+    # if len(keep) < len(boxes):
+    #     print 'filter_clockwise_boxes bad boxes: {} / {}'.format(len(boxes) - len(keep), len(boxes))
 
     return keep
 
