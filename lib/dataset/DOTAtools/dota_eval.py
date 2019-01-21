@@ -196,7 +196,7 @@ def start_eval(model_output_path, task=1, draw=False, dota_home=r'../DOTA'):
     classnames = ["%-12s"%c[:12] for c in classnames]
     aps = ["%-12s"%c for c in aps]
     info_str = 'Task{} mAP = {}'.format(task, '%.2f' % (map * 100))
-    info_str2 = '\n' + '\t'.join(classnames) + '\n' + '\t'.join(aps) + '\n'
+    info_str2 = '\n' + ' '.join(classnames) + '\n' + ' '.join(aps) + '\n'
     sys.stdout.write('\rTask{} mAP = \x1b[0;32;40m{}\x1b[0m'.format(task, '%.2f' % (map * 100)))
     sys.stdout.write(info_str2)
     sys.stdout.flush()

@@ -131,7 +131,9 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
     for child_metric in [rpn_eval_metric, rpn_cls_metric, rpn_bbox_metric, eval_metric, cls_metric, bbox_metric]:
         eval_metrics.add(child_metric)
     # callback
-    batch_end_callback = callback.Speedometer(train_data.batch_size, frequent=args.frequent)
+    batch_end_callback = callback.Speedometer(train_data.batch_size, frequent=args.frequent,
+                                              num_epoch=config.TRAIN.end_epoch - config.TRAIN.begin_epoch,
+                                              logger=logger, mxboard_writer=None)
     means = np.tile(np.array(config.TRAIN.BBOX_MEANS), 2 if config.CLASS_AGNOSTIC else config.dataset.NUM_CLASSES)
     stds = np.tile(np.array(config.TRAIN.BBOX_STDS), 2 if config.CLASS_AGNOSTIC else config.dataset.NUM_CLASSES)
     epoch_end_callback = [mx.callback.module_checkpoint(mod, prefix, period=1, save_optimizer_states=True), callback.do_checkpoint(prefix, means, stds)]
@@ -159,14 +161,21 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
     mod.fit(train_data, eval_metric=eval_metrics, epoch_end_callback=epoch_end_callback,
             batch_end_callback=batch_end_callback, kvstore=config.default.kvstore,
             optimizer='sgd', optimizer_params=optimizer_params,
+            metric_update_freq=max(config.default.metric_update_freq, config.default.frequent),
             arg_params=arg_params, aux_params=aux_params, begin_epoch=begin_epoch, num_epoch=end_epoch)
 
 
 def main():
+    print('mxnet version %s' % mx.__version__)
     print('Called with argument:', args)
-    ctx = [mx.gpu(int(i)) for i in config.gpus.split(',')]
+    if config.gpus == 'all':
+        gpus = mx.test_utils.list_gpus()
+    else:
+        gpus = [int(i) for i in config.gpus.split(',')]
+    ctx = [mx.gpu(i) for i in gpus]
     train_net(args, ctx, config.network.pretrained, config.network.pretrained_epoch, config.TRAIN.model_prefix,
               config.TRAIN.begin_epoch, config.TRAIN.end_epoch, config.TRAIN.lr, config.TRAIN.lr_step)
+    print('training over at %s' % time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
 
 if __name__ == '__main__':
     main()

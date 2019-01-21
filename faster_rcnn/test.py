@@ -47,7 +47,11 @@ from utils.create_logger import create_logger
 
 
 def main():
-    ctx = [mx.gpu(int(i)) for i in config.gpus.split(',')]
+    if config.gpus == 'all':
+        gpus = mx.test_utils.list_gpus()
+    else:
+        gpus = [int(i) for i in config.gpus.split(',')]
+    ctx = [mx.gpu(i) for i in gpus]
     print args
 
     logger, final_output_path = create_logger(config.output_path, args.cfg, config.dataset.test_image_set)

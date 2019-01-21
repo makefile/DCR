@@ -182,7 +182,7 @@ def pred_eval(predictor, test_data, imdb, cfg, vis=False, thresh=1e-3, logger=No
     if not isinstance(test_data, PrefetchingIter):
         test_data = PrefetchingIter(test_data)
 
-    #nms = py_nms_wrapper(cfg.TEST.NMS)
+    nms = py_nms_wrapper(cfg.TEST.NMS)
 
     # limit detections to max_per_image over all classes
     max_per_image = cfg.TEST.max_per_image

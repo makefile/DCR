@@ -444,7 +444,7 @@ class DOTA_oriented(IMDB):
         # fyk: write_DOTA_results will write result file for each image patch,
         # write_results_by_class will write to #cls num files
         # self.write_DOTA_results(detections, threshold=0.0)
-        self.write_results_by_class(detections, threshold=0.0)
+        self.write_results_by_class(detections, threshold=0.005)
         # print 'use native DOTA_devkit'
         # tmp_file = '/tmp/dota_eval.result' # can also in /dev/shm
         # os.system("../DOTA_devkit/eval.py {} {} {} | tee    {}".format(self.result_path, 1, draw, tmp_file)) # task 1
@@ -455,7 +455,7 @@ class DOTA_oriented(IMDB):
         info2 = dota_eval.start_eval(self.result_path, 2, draw)
         return info1 + '\n' + info2
 
-    def evaluate_detections_with_bbox(self, all_boxes, all_boxes_h, threshold=0, draw=False):
+    def evaluate_detections_with_bbox(self, all_boxes, all_boxes_h, threshold=0.005, draw=False):
         '''
         write result as format accepted by DOTA_devkit and ODAI evaluation server
         both quadrangle box and horizontal bbox

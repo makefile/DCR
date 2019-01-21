@@ -29,7 +29,7 @@ class resnet_v1_50_r2cnn_VInceptionFusionV_rfcn_dcn_light(Symbol):
     def get_resnet_v1_conv4(self, data):
         # fyk: ResNet-50-v1 differ from 101 that conv1 has bias
         conv1 = mx.symbol.Convolution(name='conv1', data=data, num_filter=64, pad=(3, 3), kernel=(7, 7), stride=(2, 2),
-                                      no_bias=False)
+                                      no_bias=False) # for ResNet-50-v1, not that important
                                       # no_bias=True) # for ResNet-101-v1
         bn_conv1 = mx.symbol.BatchNorm(name='bn_conv1', data=conv1, use_global_stats=True, fix_gamma=False, eps=self.eps)
         scale_conv1 = bn_conv1
@@ -462,6 +462,8 @@ class resnet_v1_50_r2cnn_VInceptionFusionV_rfcn_dcn_light(Symbol):
         relu1 = self.get_resnet_v1_conv5(mda3)
         rpn_cls_score, rpn_bbox_pred = self.get_rpn(mda3, num_anchors)
         assert cfg.network.RPN_FEAT_STRIDE == cfg.network.expected_feat_stride
+        assert 8 == cfg.network.expected_feat_stride
+
         spatial_scale = 1. / cfg.network.expected_feat_stride
 
         if is_train:

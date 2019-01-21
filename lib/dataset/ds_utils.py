@@ -227,7 +227,7 @@ def get_best_begin_point(coordinate):
 
 def get_rotate_rect(coordinate):
     '''simple way to get height of rotate rectangle'''
-    x1, y1, x2, y2, x3, y3, x4, y4 = coordinate
+    x1, y1, x2, y2, x3, y3, x4, y4 = map(float, coordinate) # original ushort
     dist1to4 = sqrt((x1-x4)**2 + (y1-y4)**2)
     dist2to3 = sqrt((x2-x3)**2 + (y2-y3)**2)
     return x1, y1, x2, y2, (dist1to4 + dist2to3) / 2.

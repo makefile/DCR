@@ -20,7 +20,7 @@ import numpy as np
 from module import MutableModule
 from utils import image
 from bbox.bbox_transform import bbox_pred, clip_boxes
-from nms.nms import py_nms_wrapper, cpu_nms_wrapper, gpu_nms_wrapper
+from nms.nms import py_nms_wrapper, cpu_nms_wrapper, gpu_nms_wrapper, py_softnms_wrapper
 from utils.PrefetchingIter import PrefetchingIter
 
 
@@ -186,6 +186,9 @@ def pred_eval(predictor, test_data, imdb, cfg, vis=False, thresh=1e-3, logger=No
 
     # limit detections to max_per_image over all classes
     max_per_image = cfg.TEST.max_per_image
+    # fyk add
+    if cfg.TEST.USE_SOFTNMS:
+        soft_nms = py_softnms_wrapper(cfg.TEST.SOFTNMS_THRESH, max_dets=max_per_image)
 
     num_images = imdb.num_images
     # all detections are collected into:
@@ -212,8 +215,12 @@ def pred_eval(predictor, test_data, imdb, cfg, vis=False, thresh=1e-3, logger=No
                 cls_scores = scores[indexes, j, np.newaxis]
                 cls_boxes = boxes[indexes, 4:8] if cfg.CLASS_AGNOSTIC else boxes[indexes, j * 4:(j + 1) * 4]
                 cls_dets = np.hstack((cls_boxes, cls_scores))
-                keep = nms(cls_dets)
-                all_boxes[j][idx+delta] = cls_dets[keep, :]
+                # fyk add
+                if cfg.TEST.USE_SOFTNMS:
+                    all_boxes[j][idx + delta] = soft_nms(cls_dets)
+                else:
+                    keep = nms(cls_dets)
+                    all_boxes[j][idx + delta] = cls_dets[keep, :]
 
             if max_per_image > 0:
                 image_scores = np.hstack([all_boxes[j][idx+delta][:, -1]

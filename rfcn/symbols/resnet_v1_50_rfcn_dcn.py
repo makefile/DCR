@@ -1,7 +1,8 @@
 # --------------------------------------------------------
 # Deformable Convolutional Networks
-# resnet50/18 code from https://github.com/msracver/Deformable-ConvNets/issues/99
+# resnet_v1_50/18 code from https://github.com/msracver/Deformable-ConvNets/issues/99
 # ResNet-v1 weight file is converted from Caffe
+# by https://github.com/apache/incubator-mxnet/blob/master/tools/caffe_converter
 # --------------------------------------------------------
 
 import cPickle
@@ -28,7 +29,7 @@ class resnet_v1_50_rfcn_dcn(Symbol):
     def get_resnet_v1_conv4(self, data):
         # fyk: ResNet-50-v1 differ from 101 that conv1 has bias
         conv1 = mx.symbol.Convolution(name='conv1', data=data, num_filter=64, pad=(3, 3), kernel=(7, 7), stride=(2, 2),
-                                      no_bias=False)
+                                      no_bias=False) # for ResNet-50-v1, not that important
                                       # no_bias=True) # for ResNet-101-v1
         bn_conv1 = mx.symbol.BatchNorm(name='bn_conv1', data=conv1, use_global_stats=True, fix_gamma=False, eps=self.eps)
         scale_conv1 = bn_conv1
