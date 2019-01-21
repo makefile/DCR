@@ -126,7 +126,8 @@ class DOTA(IMDB):
         roi_rec['width'] = float(w)
 
         #f = codecs.open(filename, 'r', 'utf-16')
-        if self.image_set == 'train':
+        # if self.image_set == 'train':
+        if self.image_set != 'test':
             filename = os.path.join(self.data_path, 'labelTxt', index + '.txt')
             f = codecs.open(filename, 'r')
             objs = f.readlines()

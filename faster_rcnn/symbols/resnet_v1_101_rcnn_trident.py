@@ -820,8 +820,8 @@ class resnet_v1_101_rcnn_trident(Symbol):
             weight=self.shared_param_dict['rpn_bbox_pred_weight'], bias=self.shared_param_dict['rpn_bbox_pred_bias'])
         return rpn_cls_score, rpn_bbox_pred
 
-    def get_symbol(self, cfg, is_train=True, infer_approx=True):
-        infer_approx = False
+    def get_symbol(self, cfg, is_train=True, infer_approx=False):
+
         # input init
         if is_train:
             data = mx.sym.Variable(name="data")
@@ -865,10 +865,10 @@ class resnet_v1_101_rcnn_trident(Symbol):
                 all_blob_list.extend(blob_list)
 
             # stack each blob at axis 1, [rois, cls_prob, bbox_pred]
-            n_branch    = len(dilates)
-            rois        = mx.sym.Concat(*all_blob_list[0::n_branch], dim=0, name='rois')
-            cls_prob    = mx.sym.Concat(*all_blob_list[1::n_branch], dim=1, name='cls_prob_reshape')
-            bbox_pred   = mx.sym.Concat(*all_blob_list[2::n_branch], dim=1, name='bbox_pred_reshape')
+            n_blobs = 3
+            rois        = mx.sym.Concat(*all_blob_list[0::n_blobs], dim=0, name='rois')
+            cls_prob    = mx.sym.Concat(*all_blob_list[1::n_blobs], dim=1, name='cls_prob_reshape')
+            bbox_pred   = mx.sym.Concat(*all_blob_list[2::n_blobs], dim=1, name='bbox_pred_reshape')
             group = mx.sym.Group([rois, cls_prob, bbox_pred])
 
         self.sym = group

@@ -82,18 +82,20 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
     roidb = merge_roidb(roidbs)
     roidb = filter_roidb(roidb, config)
 
-    # get system memory GB
-    mem_line = map(int, os.popen('free -g').readlines()[1].split()[1:])
-    total_mem, available_mem = mem_line[0], mem_line[-1]
-    # load training data
-    if available_mem < 32:
-        print 'use single thread prefetching in small machine.'
-        loader = QuadrangleAnchorLoader
-    else:
-        print 'use multi thread prefetching.'
-        # loader = ThreadedQuadrangleAnchorLoader
-        loader = MPQuadrangleAnchorLoader
+    # # get system memory GB
+    # mem_line = map(int, os.popen('free -g').readlines()[1].split()[1:])
+    # total_mem, available_mem = mem_line[0], mem_line[-1]
+    # # load training data
+    # if available_mem < 32:
+    #     print 'use single thread prefetching in small machine.'
+    #     loader = QuadrangleAnchorLoader
+    # else:
+    #     print 'use multi thread prefetching.'
+    #     loader = ThreadedQuadrangleAnchorLoader
+    #     # loader = MPQuadrangleAnchorLoader
 
+    # use single thread since multi-thread version speed is not smooth and consume much memory
+    loader = QuadrangleAnchorLoader
     train_data = loader(feat_sym, roidb, config, batch_size=input_batch_size, shuffle=config.TRAIN.SHUFFLE, ctx=ctx,
                               feat_stride=config.network.RPN_FEAT_STRIDE, anchor_scales=config.network.ANCHOR_SCALES,
                               anchor_ratios=config.network.ANCHOR_RATIOS, aspect_grouping=config.TRAIN.ASPECT_GROUPING)
