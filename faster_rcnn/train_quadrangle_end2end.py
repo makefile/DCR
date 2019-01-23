@@ -26,6 +26,7 @@ def parse_args():
 
     # training
     parser.add_argument('--frequent', help='frequency of logging', default=config.default.frequent, type=int)
+    parser.add_argument('--rrpn', help='with inclined RPN(rotate anchors)', action='store_true')
     args = parser.parse_args()
     return args
 
@@ -97,8 +98,9 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
     # use single thread since multi-thread version speed is not smooth and consume much memory
     loader = QuadrangleAnchorLoader
     train_data = loader(feat_sym, roidb, config, batch_size=input_batch_size, shuffle=config.TRAIN.SHUFFLE, ctx=ctx,
-                              feat_stride=config.network.RPN_FEAT_STRIDE, anchor_scales=config.network.ANCHOR_SCALES,
-                              anchor_ratios=config.network.ANCHOR_RATIOS, aspect_grouping=config.TRAIN.ASPECT_GROUPING)
+                        feat_stride=config.network.RPN_FEAT_STRIDE, anchor_scales=config.network.ANCHOR_SCALES,
+                        anchor_angles=config.network.ANCHOR_ANGLES, inclined_anchor=config.network.rrpn or args.rrpn,
+                        anchor_ratios=config.network.ANCHOR_RATIOS, aspect_grouping=config.TRAIN.ASPECT_GROUPING)
 
     # infer max shape
     max_data_shape = [('data', (config.TRAIN.BATCH_IMAGES, 3, max([v[0] for v in config.SCALES]), max([v[1] for v in config.SCALES])))]
@@ -187,16 +189,21 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
 
 
 def main():
-    print('mxnet version %s' % mx.__version__)
-    print('Called with argument:', args)
     if config.gpus == 'all':
         gpus = mx.test_utils.list_gpus()
+        # todo figure out why we need do this?
+        # when do not do this the r2cnn_v2(with rrpn) model forward will be blocked
+        config.gpus = ','.join([str(g) for g in gpus])
     else:
         gpus = [int(i) for i in config.gpus.split(',')]
     ctx = [mx.gpu(i) for i in gpus]
+    print('mxnet version %s' % mx.__version__)
+    print('train with GPU: %s' % gpus)
+    print('Called with argument:', args)
+    print('train start at %s' % time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
     train_net(args, ctx, config.network.pretrained, config.network.pretrained_epoch, config.TRAIN.model_prefix,
               config.TRAIN.begin_epoch, config.TRAIN.end_epoch, config.TRAIN.lr, config.TRAIN.lr_step)
-    print('training over at %s' % time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
+    print('train over at %s' % time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
 
 if __name__ == '__main__':
     main()

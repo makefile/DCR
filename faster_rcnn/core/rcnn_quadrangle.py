@@ -35,7 +35,7 @@ from bbox.rbbox_regression import expand_bbox_regression_targets_quadrangle
 
 from nms.nms_poly import *
 from utils.dplog import Logger as logger
-# from dataset.ds_utils import get_horizon_minAreaRectangle
+from dataset.ds_utils import get_horizon_minAreaRectangle
 
 def sample_rois_quadrangle(rois, fg_rois_per_image, rois_per_image, num_classes, cfg,
                 labels=None, overlaps=None, bbox_targets=None, gt_boxes=None,
@@ -138,7 +138,8 @@ def sample_rois_quadrangle(rois, fg_rois_per_image, rois_per_image, num_classes,
 
 
 def sample_rois_rotate(rois, fg_rois_per_image, rois_per_image, num_classes, cfg,
-                labels=None, overlaps=None, bbox_targets=None, gt_boxes=None,
+                       labels=None, overlaps=None, bbox_targets=None, gt_boxes=None,
+                       output_horizon_rois=False, output_horizon_target=False,
                        device_id=None):
     """
     generate random sample of ROIs comprising foreground and background examples
@@ -218,5 +219,24 @@ def sample_rois_rotate(rois, fg_rois_per_image, rois_per_image, num_classes, cfg
     bbox_targets, bbox_weights = \
         expand_bbox_regression_targets_quadrangle(bbox_target_data, num_classes, cfg)
 
-    return rois, labels, bbox_targets, bbox_weights
+    output_blob = [rois, labels, bbox_targets, bbox_weights]
+    if output_horizon_rois:
+        # fyk: get bbox of quadrangle rois: [batch_idx, x1, y1, x2, y2, x3, y3, x4, y4]
+        bbox_proposals = get_horizon_minAreaRectangle(rois[:, 1:])
+        batch_inds = np.zeros((bbox_proposals.shape[0], 1), dtype=np.float32)
+        bbox_proposals = np.hstack((batch_inds, bbox_proposals))
+        output_blob.append(bbox_proposals) # bbox_proposals.astype(np.float32, copy=False))
+
+        if output_horizon_target:
+            # compute bbox_target
+            gt_boxes_bbox = get_horizon_minAreaRectangle(gt_boxes[:, :8])
+            targets_h = bbox_transform(bbox_proposals[:, 1:], gt_boxes_bbox[gt_assignment[keep_indexes]])
+            if cfg.TRAIN.BBOX_NORMALIZATION_PRECOMPUTED:
+                targets_h = ((targets_h - np.array(cfg.TRAIN.BBOX_MEANS[:4]))
+                             / np.array(cfg.TRAIN.BBOX_STDS[:4]))
+            bbox_target_data_h = np.hstack((labels[:, np.newaxis], targets_h))
+            bbox_targets_h, bbox_weights_h = expand_bbox_regression_targets(bbox_target_data_h, num_classes, cfg)
+            output_blob.extend([bbox_targets_h, bbox_weights_h])
+
+    return output_blob
 

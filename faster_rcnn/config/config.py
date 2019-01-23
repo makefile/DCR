@@ -51,6 +51,8 @@ config.network.ANCHOR_SCALES = (8, 16, 32)
 config.network.ANCHOR_RATIOS = (0.5, 1, 2)
 config.network.ANCHOR_ANGLES = (0, )
 config.network.NUM_ANCHORS = len(config.network.ANCHOR_SCALES) * len(config.network.ANCHOR_RATIOS)
+# RRPN or normal bbox RPN
+config.network.rrpn = False
 
 # dataset related params
 config.dataset = edict()
@@ -148,12 +150,12 @@ config.TRAIN.BBOX_NORMALIZATION_PRECOMPUTED = False
 config.TRAIN.BBOX_MEANS = (0.0, 0.0, 0.0, 0.0)
 config.TRAIN.BBOX_STDS = (0.1, 0.1, 0.2, 0.2)
 
-# R2CNN
+# weight balance
 config.TRAIN.RPN_LOCATION_LOSS_WEIGHT = 1
-config.TRAIN.RPN_CLASSIFICATION_LOSS_WEIGHT = 2
+config.TRAIN.RPN_CLASSIFICATION_LOSS_WEIGHT = 1
 config.TRAIN.BINARY_MASK_LOSS_WEIGHT = 1
-config.TRAIN.FAST_RCNN_LOCATION_LOSS_WEIGHT = 4
-config.TRAIN.FAST_RCNN_CLASSIFICATION_LOSS_WEIGHT = 2
+config.TRAIN.FAST_RCNN_LOCATION_LOSS_WEIGHT = 1
+config.TRAIN.FAST_RCNN_CLASSIFICATION_LOSS_WEIGHT = 1
 
 config.TEST = edict()
 

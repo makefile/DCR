@@ -6,6 +6,8 @@ import resnet_v1_101_rrpn_v2
 import resnet_v2_50_rrpn_v2
 import resnet_v1_101_r2cnn
 import resnet_v1_101_r2cnn_plus
+import resnet_v1_101_r2cnn_v2
+import resnet_v1_101_r2cnn_v2_plus
 import resnet_v1_101_r2cnn_plus_trident
 import resnet_v1_101_r2cnn_rfcn_dcn_light
 import resnet_v1_101_r2cnn_plus_rfcn_dcn_light

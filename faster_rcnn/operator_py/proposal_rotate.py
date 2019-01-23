@@ -139,16 +139,17 @@ class ProposalOperator(mx.operator.CustomOp):
         # 2. clip predicted boxes to image
         proposals = clip_quadrangle_boxes(proposals, im_info[:2])
 
-        # 3. remove predicted boxes with either height or width < threshold
-        # (NOTE: convert min_size to input image scale stored in im_info[2])
-        keep = self._filter_boxes(proposals, min_size * im_info[2])
-        proposals = proposals[keep, :]
-        scores = scores[keep]
-
         # fyk: remove non clockwise order boxes (some boxes are not normal quandrangle)
         keep = filter_convex_boxes(proposals)
         proposals = proposals[keep, :]
         scores = scores[keep]
+
+        # 3. remove predicted boxes with either height or width < threshold
+        # (NOTE: convert min_size to input image scale stored in im_info[2])
+        if min_size > 0:
+            keep = self._filter_boxes(proposals, min_size * im_info[2])
+            proposals = proposals[keep, :]
+            scores = scores[keep]
 
         # 4. sort all (proposal, score) pairs by score from highest to lowest
         # 5. take top pre_nms_topN (e.g. 6000)
@@ -238,7 +239,7 @@ class ProposalOperator(mx.operator.CustomOp):
 @mx.operator.register("proposal_rotate")
 class ProposalProp(mx.operator.CustomOpProp):
     def __init__(self, feat_stride='16', scales='(8, 16, 32)', ratios='(0.5, 1, 2)',
-                 angles='(-60, -30, 0, 30, 60, 90)',
+                 angles='(-60, -30, 0)',
                  output_score='False', output_horizon_rois='False',
                  rpn_pre_nms_top_n='6000', rpn_post_nms_top_n='300', threshold='0.3', rpn_min_size='16'):
         super(ProposalProp, self).__init__(need_top_grad=False)
